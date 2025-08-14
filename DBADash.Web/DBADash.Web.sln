@@ -1,0 +1,45 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DBADash.Web.Server", "DBADash.Web.Server\DBADash.Web.Server.csproj", "{2F8B5B5A-4D3A-4C5E-8F1A-1B2C3D4E5F60}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DBADash.Web.Client", "DBADash.Web.Client\DBADash.Web.Client.csproj", "{3F9C6C6B-5E4B-5D6F-9G2B-2C3D4E5F6071}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DBADash.Web.Shared", "DBADash.Web.Shared\DBADash.Web.Shared.csproj", "{4F0D7D7C-6F5C-6E70-0H3C-3D4E5F607182}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DBADash.Web.API", "DBADash.Web.API\DBADash.Web.API.csproj", "{5F1E8E8D-7061-7F81-1I4D-4E5F607283F3}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DBADash.Web.Core", "DBADash.Web.Core\DBADash.Web.Core.csproj", "{6F2F9F9E-8172-8092-2J5E-5F607384304}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{2F8B5B5A-4D3A-4C5E-8F1A-1B2C3D4E5F60}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2F8B5B5A-4D3A-4C5E-8F1A-1B2C3D4E5F60}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2F8B5B5A-4D3A-4C5E-8F1A-1B2C3D4E5F60}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2F8B5B5A-4D3A-4C5E-8F1A-1B2C3D4E5F60}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3F9C6C6B-5E4B-5D6F-9G2B-2C3D4E5F6071}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3F9C6C6B-5E4B-5D6F-9G2B-2C3D4E5F6071}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3F9C6C6B-5E4B-5D6F-9G2B-2C3D4E5F6071}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3F9C6C6B-5E4B-5D6F-9G2B-2C3D4E5F6071}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4F0D7D7C-6F5C-6E70-0H3C-3D4E5F607182}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4F0D7D7C-6F5C-6E70-0H3C-3D4E5F607182}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4F0D7D7C-6F5C-6E70-0H3C-3D4E5F607182}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4F0D7D7C-6F5C-6E70-0H3C-3D4E5F607182}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5F1E8E8D-7061-7F81-1I4D-4E5F607283F3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5F1E8E8D-7061-7F81-1I4D-4E5F607283F3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5F1E8E8D-7061-7F81-1I4D-4E5F607283F3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5F1E8E8D-7061-7F81-1I4D-4E5F607283F3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6F2F9F9E-8172-8092-2J5E-5F607384304}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6F2F9F9E-8172-8092-2J5E-5F607384304}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6F2F9F9E-8172-8092-2J5E-5F607384304}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6F2F9F9E-8172-8092-2J5E-5F607384304}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

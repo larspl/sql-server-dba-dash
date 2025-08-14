@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  # DBADash Web Application
+  dbadash-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dbadash-web
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__DefaultConnection=Server=sql-server;Database=DBADash;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true;
+      - Serilog__MinimumLevel=Information
+      - Serilog__WriteTo__0__Name=Console
+      - Serilog__WriteTo__1__Name=File
+      - Serilog__WriteTo__1__Args__path=/app/logs/dbadash-.log
+      - Serilog__WriteTo__1__Args__rollingInterval=Day
+    volumes:
+      - dbadash-logs:/app/logs
+    depends_on:
+      sql-server:
+        condition: service_healthy
+    networks:
+      - dbadash-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # SQL Server Database (for development/testing)
+  sql-server:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: dbadash-sql
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=YourStrong@Passw0rd
+      - MSSQL_PID=Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - sql-data:/var/opt/mssql
+      - ./Scripts/InitializeDatabase.sql:/docker-entrypoint-initdb.d/InitializeDatabase.sql:ro
+    networks:
+      - dbadash-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P YourStrong@Passw0rd -Q 'SELECT 1' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Nginx Reverse Proxy (optional)
+  nginx:
+    image: nginx:alpine
+    container_name: dbadash-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - dbadash-web
+    networks:
+      - dbadash-network
+    restart: unless-stopped
+
+  # Redis for SignalR scale-out (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: dbadash-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - dbadash-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+networks:
+  dbadash-network:
+    driver: bridge
+    name: dbadash-network
+
+volumes:
+  sql-data:
+    name: dbadash-sql-data
+  dbadash-logs:
+    name: dbadash-logs
+  redis-data:
+    name: dbadash-redis-data
