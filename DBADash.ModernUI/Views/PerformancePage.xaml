@@ -1,0 +1,170 @@
+<Page
+    x:Class="DBADash.ModernUI.Views.PerformancePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:lvc="using:LiveChartsCore.SkiaSharpView.WinUI"
+    Background="{StaticResource DBADashBackgroundBrush}">
+
+    <ScrollViewer>
+        <Grid Padding="24">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <StackPanel Grid.Row="0" Spacing="8" Margin="0,0,0,24">
+                <TextBlock Text="Performance Monitoring" Style="{StaticResource TitleTextBlockStyle}"/>
+                <TextBlock Text="Real-time SQL Server performance metrics and historical trends" 
+                          Style="{StaticResource BodyTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+            </StackPanel>
+
+            <!-- Metrics Overview Cards -->
+            <Grid Grid.Row="1" Margin="0,0,0,24">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                
+                <!-- CPU Usage Card -->
+                <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}" Margin="0,0,12,0">
+                    <StackPanel Padding="20" Spacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE9F3;" FontSize="16" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                            <TextBlock Text="CPU Usage" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                        </StackPanel>
+                        <TextBlock x:Name="CpuUsageText" Text="{x:Bind ViewModel.CpuUsage, Mode=OneWay}" Style="{StaticResource SubheaderTextBlockStyle}" 
+                                  Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                        <TextBlock Text="{x:Bind ViewModel.CpuTrend, Mode=OneWay}" Style="{StaticResource CaptionTextBlockStyle}" 
+                                  Foreground="{ThemeResource SystemFillColorSuccessBrush}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Memory Usage Card -->
+                <Border Grid.Column="1" Style="{StaticResource CardBorderStyle}" Margin="6,0,6,0">
+                    <StackPanel Padding="20" Spacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE950;" FontSize="16" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                            <TextBlock Text="Memory Usage" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                        </StackPanel>
+                        <TextBlock x:Name="MemoryUsageText" Text="{x:Bind ViewModel.MemoryUsage, Mode=OneWay}" Style="{StaticResource SubheaderTextBlockStyle}" 
+                                  Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                        <TextBlock Text="{x:Bind ViewModel.MemoryTrend, Mode=OneWay}" Style="{StaticResource CaptionTextBlockStyle}" 
+                                  Foreground="{ThemeResource SystemFillColorCautionBrush}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Disk I/O Card -->
+                <Border Grid.Column="2" Style="{StaticResource CardBorderStyle}" Margin="6,0,6,0">
+                    <StackPanel Padding="20" Spacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xEDA2;" FontSize="16" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                            <TextBlock Text="Disk I/O" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                        </StackPanel>
+                        <TextBlock x:Name="DiskIOText" Text="{x:Bind ViewModel.DiskIO, Mode=OneWay}" Style="{StaticResource SubheaderTextBlockStyle}" 
+                                  Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                        <TextBlock Text="{x:Bind ViewModel.DiskTrend, Mode=OneWay}" Style="{StaticResource CaptionTextBlockStyle}" 
+                                  Foreground="{ThemeResource SystemFillColorSuccessBrush}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Connections Card -->
+                <Border Grid.Column="3" Style="{StaticResource CardBorderStyle}" Margin="12,0,0,0">
+                    <StackPanel Padding="20" Spacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE968;" FontSize="16" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                            <TextBlock Text="Connections" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                        </StackPanel>
+                        <TextBlock x:Name="ConnectionsText" Text="{x:Bind ViewModel.ActiveConnections, Mode=OneWay}" Style="{StaticResource SubheaderTextBlockStyle}" 
+                                  Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                        <TextBlock Text="{x:Bind ViewModel.ConnectionTrend, Mode=OneWay}" Style="{StaticResource CaptionTextBlockStyle}" 
+                                  Foreground="{ThemeResource SystemFillColorSuccessBrush}"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- Performance Charts -->
+            <Grid Grid.Row="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- CPU Performance Chart -->
+                <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource CardBorderStyle}" Margin="0,0,12,12">
+                    <StackPanel Padding="20">
+                        <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,0,0,16">
+                            <FontIcon Glyph="&#xE9F3;" FontSize="20" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                            <TextBlock Text="CPU Performance" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                            <ComboBox x:Name="CpuTimeRangeComboBox" SelectedIndex="0" MinWidth="120" HorizontalAlignment="Right">
+                                <ComboBoxItem Content="Last Hour"/>
+                                <ComboBoxItem Content="Last 4 Hours"/>
+                                <ComboBoxItem Content="Last 24 Hours"/>
+                                <ComboBoxItem Content="Last Week"/>
+                            </ComboBox>
+                        </StackPanel>
+                        <lvc:CartesianChart x:Name="CpuChart" Height="300" Series="{x:Bind ViewModel.CpuSeries, Mode=OneWay}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Memory Performance Chart -->
+                <Border Grid.Row="0" Grid.Column="1" Style="{StaticResource CardBorderStyle}" Margin="12,0,0,12">
+                    <StackPanel Padding="20">
+                        <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,0,0,16">
+                            <FontIcon Glyph="&#xE950;" FontSize="20" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                            <TextBlock Text="Memory Usage" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                            <ComboBox x:Name="MemoryTimeRangeComboBox" SelectedIndex="0" MinWidth="120" HorizontalAlignment="Right">
+                                <ComboBoxItem Content="Last Hour"/>
+                                <ComboBoxItem Content="Last 4 Hours"/>
+                                <ComboBoxItem Content="Last 24 Hours"/>
+                                <ComboBoxItem Content="Last Week"/>
+                            </ComboBox>
+                        </StackPanel>
+                        <lvc:CartesianChart x:Name="MemoryChart" Height="300" Series="{x:Bind ViewModel.MemorySeries, Mode=OneWay}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Disk I/O Chart -->
+                <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource CardBorderStyle}" Margin="0,12,12,0">
+                    <StackPanel Padding="20">
+                        <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,0,0,16">
+                            <FontIcon Glyph="&#xEDA2;" FontSize="20" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                            <TextBlock Text="Disk I/O Performance" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                            <ComboBox x:Name="DiskTimeRangeComboBox" SelectedIndex="0" MinWidth="120" HorizontalAlignment="Right">
+                                <ComboBoxItem Content="Last Hour"/>
+                                <ComboBoxItem Content="Last 4 Hours"/>
+                                <ComboBoxItem Content="Last 24 Hours"/>
+                                <ComboBoxItem Content="Last Week"/>
+                            </ComboBox>
+                        </StackPanel>
+                        <lvc:CartesianChart x:Name="DiskChart" Height="300" Series="{x:Bind ViewModel.DiskSeries, Mode=OneWay}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Connection Activity Chart -->
+                <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource CardBorderStyle}" Margin="12,12,0,0">
+                    <StackPanel Padding="20">
+                        <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,0,0,16">
+                            <FontIcon Glyph="&#xE968;" FontSize="20" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                            <TextBlock Text="Connection Activity" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                            <ComboBox x:Name="ConnectionTimeRangeComboBox" SelectedIndex="0" MinWidth="120" HorizontalAlignment="Right">
+                                <ComboBoxItem Content="Last Hour"/>
+                                <ComboBoxItem Content="Last 4 Hours"/>
+                                <ComboBoxItem Content="Last 24 Hours"/>
+                                <ComboBoxItem Content="Last Week"/>
+                            </ComboBox>
+                        </StackPanel>
+                        <lvc:CartesianChart x:Name="ConnectionChart" Height="300" Series="{x:Bind ViewModel.ConnectionSeries, Mode=OneWay}"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Grid>
+    </ScrollViewer>
+</Page>

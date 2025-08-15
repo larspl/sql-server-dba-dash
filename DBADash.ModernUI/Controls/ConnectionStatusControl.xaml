@@ -1,0 +1,32 @@
+<UserControl
+    x:Class="DBADash.ModernUI.Controls.ConnectionStatusControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:viewmodels="using:DBADash.ModernUI.ViewModels">
+
+    <Border
+        Background="{StaticResource DBADashCardBrush}"
+        CornerRadius="16"
+        Padding="12,6">
+        
+        <StackPanel Orientation="Horizontal" Spacing="8">
+            <!-- Connection Status Indicator -->
+            <Ellipse
+                Width="8"
+                Height="8"
+                Fill="{x:Bind GetStatusColor(ViewModel.IsConnected), Mode=OneWay}"
+                VerticalAlignment="Center" />
+            
+            <!-- Status Text -->
+            <TextBlock
+                Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
+                Style="{StaticResource DBADashCaptionTextStyle}"
+                VerticalAlignment="Center" />
+            
+            <!-- Tooltip -->
+            <ToolTipService.ToolTip>
+                <ToolTip Content="{x:Bind ViewModel.ToolTipText, Mode=OneWay}" />
+            </ToolTipService.ToolTip>
+        </StackPanel>
+    </Border>
+</UserControl>

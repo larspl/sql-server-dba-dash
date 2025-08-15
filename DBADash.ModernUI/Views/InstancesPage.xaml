@@ -1,0 +1,270 @@
+<Page
+    x:Class="DBADash.ModernUI.Views.InstancesPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:dx="using:DevExpress.WinUI.Grid"
+    Background="{StaticResource DBADashBackgroundBrush}">
+
+    <Grid Padding="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Spacing="8" Margin="0,0,0,24">
+            <TextBlock Text="SQL Server Instances" Style="{StaticResource TitleTextBlockStyle}"/>
+            <TextBlock Text="Monitor and manage your SQL Server instances" 
+                      Style="{StaticResource BodyTextBlockStyle}" 
+                      Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+        </StackPanel>
+
+        <!-- Toolbar -->
+        <Grid Grid.Row="1" Margin="0,0,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Search and Filter -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12">
+                <TextBox x:Name="SearchBox" 
+                        PlaceholderText="Search instances..." 
+                        MinWidth="300"
+                        Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+                    <TextBox.Resources>
+                        <Style TargetType="TextBox">
+                            <Setter Property="BorderBrush" Value="{ThemeResource ControlElevationBorderBrush}"/>
+                        </Style>
+                    </TextBox.Resources>
+                </TextBox>
+                
+                <ComboBox x:Name="StatusFilterComboBox" 
+                         Header="Status" 
+                         MinWidth="140"
+                         SelectedIndex="{x:Bind ViewModel.StatusFilterIndex, Mode=TwoWay}">
+                    <ComboBoxItem Content="All Statuses"/>
+                    <ComboBoxItem Content="Online"/>
+                    <ComboBoxItem Content="Offline"/>
+                    <ComboBoxItem Content="Warning"/>
+                    <ComboBoxItem Content="Critical"/>
+                </ComboBox>
+
+                <ComboBox x:Name="VersionFilterComboBox" 
+                         Header="Version" 
+                         MinWidth="140"
+                         SelectedIndex="{x:Bind ViewModel.VersionFilterIndex, Mode=TwoWay}">
+                    <ComboBoxItem Content="All Versions"/>
+                    <ComboBoxItem Content="SQL Server 2022"/>
+                    <ComboBoxItem Content="SQL Server 2019"/>
+                    <ComboBoxItem Content="SQL Server 2017"/>
+                    <ComboBoxItem Content="SQL Server 2016"/>
+                    <ComboBoxItem Content="SQL Server 2014"/>
+                </ComboBox>
+            </StackPanel>
+
+            <!-- Action Buttons -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                <Button Content="Add Instance" 
+                       Command="{x:Bind ViewModel.AddInstanceCommand}"
+                       Style="{StaticResource AccentButtonStyle}">
+                    <Button.Resources>
+                        <Style TargetType="Button" BasedOn="{StaticResource AccentButtonStyle}">
+                            <Setter Property="CornerRadius" Value="4"/>
+                        </Style>
+                    </Button.Resources>
+                </Button>
+                
+                <Button Content="Refresh All" 
+                       Command="{x:Bind ViewModel.RefreshAllCommand}">
+                    <Button.Resources>
+                        <Style TargetType="Button">
+                            <Setter Property="CornerRadius" Value="4"/>
+                        </Style>
+                    </Button.Resources>
+                </Button>
+                
+                <Button Content="Export" 
+                       Command="{x:Bind ViewModel.ExportCommand}">
+                    <Button.Resources>
+                        <Style TargetType="Button">
+                            <Setter Property="CornerRadius" Value="4"/>
+                        </Style>
+                    </Button.Resources>
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!-- Data Grid -->
+        <Border Grid.Row="2" Style="{StaticResource CardBorderStyle}">
+            <dx:GridControl x:Name="InstancesGrid" 
+                           ItemsSource="{x:Bind ViewModel.FilteredInstances, Mode=OneWay}"
+                           ShowGroupPanel="False"
+                           ShowSearchPanelMode="Always"
+                           AutoGenerateColumns="False"
+                           SelectionMode="Row"
+                           SelectedItem="{x:Bind ViewModel.SelectedInstance, Mode=TwoWay}">
+                
+                <!-- Grid View -->
+                <dx:GridControl.View>
+                    <dx:TableView AutoWidth="True" 
+                                 ShowGroupPanel="False"
+                                 NavigationStyle="Row"
+                                 ShowIndicator="False"
+                                 AllowEditing="False"
+                                 AllowSorting="True"
+                                 AllowGrouping="True"
+                                 ShowAutoFilterRow="True"/>
+                </dx:GridControl.View>
+
+                <!-- Columns -->
+                <dx:GridControl.Columns>
+                    <!-- Status Indicator -->
+                    <dx:GridColumn FieldName="Status" 
+                                  Header="Status" 
+                                  Width="80"
+                                  AllowSorting="True"
+                                  AllowGrouping="True">
+                        <dx:GridColumn.DisplayTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Ellipse Width="8" Height="8" 
+                                            Fill="{Binding Status, Converter={StaticResource StatusToBrushConverter}}"/>
+                                    <TextBlock Text="{Binding Status}" 
+                                              Style="{StaticResource CaptionTextBlockStyle}"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </dx:GridColumn.DisplayTemplate>
+                    </dx:GridColumn>
+
+                    <!-- Instance Name -->
+                    <dx:GridColumn FieldName="InstanceName" 
+                                  Header="Instance Name" 
+                                  Width="200"
+                                  AllowSorting="True">
+                        <dx:GridColumn.DisplayTemplate>
+                            <DataTemplate>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding InstanceName}" 
+                                              Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                                    <TextBlock Text="{Binding ServerName}" 
+                                              Style="{StaticResource CaptionTextBlockStyle}"
+                                              Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </dx:GridColumn.DisplayTemplate>
+                    </dx:GridColumn>
+
+                    <!-- Version -->
+                    <dx:GridColumn FieldName="Version" 
+                                  Header="Version" 
+                                  Width="140"
+                                  AllowSorting="True"
+                                  AllowGrouping="True"/>
+
+                    <!-- Edition -->
+                    <dx:GridColumn FieldName="Edition" 
+                                  Header="Edition" 
+                                  Width="120"
+                                  AllowSorting="True"
+                                  AllowGrouping="True"/>
+
+                    <!-- CPU Usage -->
+                    <dx:GridColumn FieldName="CpuUsage" 
+                                  Header="CPU %" 
+                                  Width="80"
+                                  AllowSorting="True">
+                        <dx:GridColumn.DisplayTemplate>
+                            <DataTemplate>
+                                <ProgressBar Value="{Binding CpuUsage}" 
+                                           Maximum="100" 
+                                           Height="8"
+                                           Margin="4"/>
+                            </DataTemplate>
+                        </dx:GridColumn.DisplayTemplate>
+                    </dx:GridColumn>
+
+                    <!-- Memory Usage -->
+                    <dx:GridColumn FieldName="MemoryUsage" 
+                                  Header="Memory %" 
+                                  Width="80"
+                                  AllowSorting="True">
+                        <dx:GridColumn.DisplayTemplate>
+                            <DataTemplate>
+                                <ProgressBar Value="{Binding MemoryUsage}" 
+                                           Maximum="100" 
+                                           Height="8"
+                                           Margin="4"/>
+                            </DataTemplate>
+                        </dx:GridColumn.DisplayTemplate>
+                    </dx:GridColumn>
+
+                    <!-- Connections -->
+                    <dx:GridColumn FieldName="ActiveConnections" 
+                                  Header="Connections" 
+                                  Width="100"
+                                  AllowSorting="True"/>
+
+                    <!-- Last Backup -->
+                    <dx:GridColumn FieldName="LastBackup" 
+                                  Header="Last Backup" 
+                                  Width="150"
+                                  AllowSorting="True">
+                        <dx:GridColumn.DisplayTemplate>
+                            <DataTemplate>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding LastBackup, Converter={StaticResource DateTimeToStringConverter}}" 
+                                              Style="{StaticResource CaptionTextBlockStyle}"/>
+                                    <TextBlock Text="{Binding LastBackupAge}" 
+                                              Style="{StaticResource CaptionTextBlockStyle}"
+                                              Foreground="{Binding LastBackupStatus, Converter={StaticResource StatusToBrushConverter}}"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </dx:GridColumn.DisplayTemplate>
+                    </dx:GridColumn>
+
+                    <!-- Last Seen -->
+                    <dx:GridColumn FieldName="LastSeen" 
+                                  Header="Last Seen" 
+                                  Width="120"
+                                  AllowSorting="True">
+                        <dx:GridColumn.DisplayTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding LastSeen, Converter={StaticResource RelativeTimeConverter}}" 
+                                          Style="{StaticResource CaptionTextBlockStyle}"/>
+                            </DataTemplate>
+                        </dx:GridColumn.DisplayTemplate>
+                    </dx:GridColumn>
+
+                    <!-- Actions -->
+                    <dx:GridColumn Header="Actions" 
+                                  Width="120"
+                                  AllowSorting="False"
+                                  AllowGrouping="False">
+                        <dx:GridColumn.DisplayTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <Button Content="Details" 
+                                           Command="{Binding DataContext.ViewDetailsCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                           CommandParameter="{Binding}"
+                                           Style="{StaticResource AccentButtonStyle}"
+                                           Height="24"
+                                           Padding="8,2"
+                                           FontSize="12"/>
+                                    
+                                    <Button Content="Configure" 
+                                           Command="{Binding DataContext.ConfigureCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                           CommandParameter="{Binding}"
+                                           Height="24"
+                                           Padding="8,2"
+                                           FontSize="12"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </dx:GridColumn.DisplayTemplate>
+                    </dx:GridColumn>
+                </dx:GridControl.Columns>
+            </dx:GridControl>
+        </Border>
+    </Grid>
+</Page>

@@ -19,6 +19,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DBADash.Test", "DBADash.Tes
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DBADashSharedGUI", "DBADashSharedGUI\DBADashSharedGUI.csproj", "{EAD0C906-86A2-4A12-80BC-582A25E557DB}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DBADash.ModernUI", "DBADash.ModernUI\DBADash.ModernUI.csproj", "{B8A2F3E1-4567-4890-ABCD-EF1234567890}"
+EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{30FF5BFF-FDD6-4A23-8A51-9B287A05A29E}"
 	ProjectSection(SolutionItems) = preProject
 		.editorconfig = .editorconfig
@@ -117,6 +119,16 @@ Global
 		{EAD0C906-86A2-4A12-80BC-582A25E557DB}.DebugLocal|Any CPU.Build.0 = Debug|Any CPU
 		{EAD0C906-86A2-4A12-80BC-582A25E557DB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{EAD0C906-86A2-4A12-80BC-582A25E557DB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B8A2F3E1-4567-4890-ABCD-EF1234567890}.CLI|Any CPU.ActiveCfg = Debug|Any CPU
+		{B8A2F3E1-4567-4890-ABCD-EF1234567890}.CLI|Any CPU.Build.0 = Debug|Any CPU
+		{B8A2F3E1-4567-4890-ABCD-EF1234567890}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B8A2F3E1-4567-4890-ABCD-EF1234567890}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B8A2F3E1-4567-4890-ABCD-EF1234567890}.Debug2|Any CPU.ActiveCfg = Debug|Any CPU
+		{B8A2F3E1-4567-4890-ABCD-EF1234567890}.Debug2|Any CPU.Build.0 = Debug|Any CPU
+		{B8A2F3E1-4567-4890-ABCD-EF1234567890}.DebugLocal|Any CPU.ActiveCfg = Debug|Any CPU
+		{B8A2F3E1-4567-4890-ABCD-EF1234567890}.DebugLocal|Any CPU.Build.0 = Debug|Any CPU
+		{B8A2F3E1-4567-4890-ABCD-EF1234567890}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B8A2F3E1-4567-4890-ABCD-EF1234567890}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
