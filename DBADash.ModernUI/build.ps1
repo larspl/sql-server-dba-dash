@@ -69,6 +69,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "Clean failed" }
         Write-Host "✅ Clean completed" -ForegroundColor Green
     }
+    
 
     # Restore packages
     if ($Restore) {
@@ -117,6 +118,7 @@ try {
     Write-Error "❌ Build failed: $_"
     exit 1
 }
+
 
 # Display usage if no parameters were provided
 if ($args.Count -eq 0 -and -not $All) {
