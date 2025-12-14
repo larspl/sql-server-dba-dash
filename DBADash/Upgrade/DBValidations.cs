@@ -2,6 +2,7 @@
 using System;
 using System.Threading.Tasks;
 using Octokit;
+using System.Threading;
 
 namespace DBADash
 {
@@ -27,18 +28,93 @@ namespace DBADash
             public bool DeployInProgress;
         }
 
-        public static bool DBExists(string connectionString)
+        private static async Task TestConnectionAsync(string connectionString, CancellationToken ct = default)
         {
-            SqlConnectionStringBuilder builder = new(connectionString);
-            var db = builder.InitialCatalog;
-            builder.InitialCatalog = "";
-            connectionString = builder.ConnectionString;
+            await using var cn = new SqlConnection(connectionString);
+            await cn.OpenAsync(ct);
+        }
 
-            using var cn = new SqlConnection(connectionString);
-            using var cmd = new SqlCommand("SELECT CASE WHEN EXISTS(SELECT 1 FROM sys.databases WHERE name = @db) THEN CAST(1 as  BIT) ELSE CAST(0 as BIT) END as DBExists",cn);
-            cn.Open();
+        /// <summary>
+        /// Used as part of DBExistsAsync to check for existence of the initial catalog database.  Connects to master database to check if the DB specified in the initial catalog exists.
+        /// The DBExistsAsync method will first attempt to connect directly to the specified database, and if that fails, it will call this method to check for existence.
+        /// </summary>
+        /// <param name="connectionString">Connection string to test</param>
+        /// <param name="ct"></param>
+        /// <returns></returns>
+        private static async Task<bool> InitialCatalogDatabaseExistsAsync(string connectionString, CancellationToken ct = default)
+        {
+            var builder = new SqlConnectionStringBuilder(connectionString);
+            var db = builder.InitialCatalog;
+            // Connect to master to check if DB exists
+            // Note: This may fail for contained databases or if the user has insufficient permissions to access 'master'.
+            builder.InitialCatalog = "master";
+            await using var cn = new SqlConnection(builder.ConnectionString);
+            await using var cmd = new SqlCommand(
+                "SELECT CASE WHEN EXISTS(SELECT 1 FROM sys.databases WHERE name = @db) THEN 1 ELSE 0 END",
+                cn);
             cmd.Parameters.AddWithValue("@db", db);
-            return (bool)cmd.ExecuteScalar();
+            await cn.OpenAsync(ct);
+            var result = await cmd.ExecuteScalarAsync(ct);
+            return result is int i && i == 1;
+        }
+
+
+        /// <summary>
+        /// Checks if the initial catalog database exists by checking sys.databases in master or by attempting to connect directly.
+        /// Master connection may fail for contained databases or if the user has insufficient permissions to access 'master'.
+        /// Connecting directly to the DB might be slower if the DB doesn't exist
+        /// </summary>
+        /// <param name="connectionString">Connection string to test</param>
+        /// <param name="ct"></param>
+        /// <returns></returns>
+        public static async Task<bool> DBExistsAsync(string connectionString, CancellationToken ct = default)
+        {
+            // Edge case: no initial catalog provided -> let direct connection decide (likely points to default DB).
+            var builder = new SqlConnectionStringBuilder(connectionString);
+            if (string.IsNullOrWhiteSpace(builder.InitialCatalog))
+            {
+                await TestConnectionAsync(connectionString, ct);
+                return true;
+            }
+
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            // Timeout after 30 seconds
+            linkedCts.CancelAfter(TimeSpan.FromSeconds(30));
+
+            var connectionTask = TestConnectionAsync(connectionString, linkedCts.Token);
+            var dbExistsTask = InitialCatalogDatabaseExistsAsync(connectionString, linkedCts.Token);
+
+            var first = await Task.WhenAny(connectionTask, dbExistsTask);
+
+            if (first == connectionTask)
+            {
+                // If we can connect directly, the DB exists  
+                if (first.IsCompletedSuccessfully)
+                {
+                    await first;
+                    linkedCts.Cancel();
+                    dbExistsTask.ObserveFault(); // Avoid unobserved task exception
+                    return true;
+                }
+                // Connection failed -> rely on catalog existence (may throw).
+                return await dbExistsTask;
+            }
+            else
+            {
+                try
+                {
+                    var exists = await dbExistsTask;
+                    linkedCts.Cancel();
+                    connectionTask.ObserveFault(); // Avoid unobserved task exception
+                    return exists;
+                }
+                catch
+                {
+                    // Catalog check failed (permissions / connectivity). If direct connection works, treat as exists.
+                    await connectionTask;
+                    return true;
+                }
+            }
         }
 
         public static (Version Version, bool DeployInProgress) GetDBVersion(string connectionString)
@@ -73,7 +149,7 @@ ELSE IF NOT EXISTS(SELECT *
             )
         AND DB_ID()>4
 BEGIN
-	SELECT '0.0.0.0' AS Version,@DeployInProgress AS DeployInProgress
+	SELECT '0.0.0.0' AS Version,CAST(0 AS BIT) AS DeployInProgress
 END
 ELSE
 BEGIN
@@ -92,18 +168,21 @@ END
                 version = (string)rdr["Version"];
                 deployInProgress = (bool)rdr["DeployInProgress"];
             }
-            version ??= "0.0.0.1";
-
+            else // First time deployment is likely in progress
+            {
+                deployInProgress = true;
+                version = "0.0.0.1";
+            }
             return (Version.Parse(version), deployInProgress);
         }
 
-        public static DBVersionStatus VersionStatus(string connectionString)
+        public static async Task<DBVersionStatus> VersionStatusAsync(string connectionString)
         {
             DBVersionStatus status = new()
             {
                 DACVersion = DacpacUtility.DacpacService.GetVersion(DACPackPath)
             };
-            if (!DBExists(connectionString))
+            if (!await DBExistsAsync(connectionString))
             {
                 status.VersionStatus = DBVersionStatusEnum.CreateDB;
             }
@@ -142,17 +221,13 @@ END
             }
         }
 
-        public static Task UpgradeDBAsync(string connectionString, string db)
+        public static async Task UpgradeDBAsync(string connectionString, string db)
         {
             DacpacUtility.DacpacService dac = new();
-            var status = VersionStatus(connectionString);
+            var status = await VersionStatusAsync(connectionString);
             if (status.VersionStatus is DBVersionStatusEnum.UpgradeRequired or DBVersionStatusEnum.CreateDB || status.DeployInProgress)
             {
-                return Task.Run(() => dac.ProcessDacPac(connectionString, db, DACPackPath, status.VersionStatus));
-            }
-            else
-            {
-                return Task.CompletedTask;
+                await Task.Run(() => dac.ProcessDacPac(connectionString, db, DACPackPath, status.VersionStatus));
             }
         }
     }

@@ -45,13 +45,13 @@ namespace DBADashGUI
             configureDisplayNameToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             externalDiffToolToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             dataRetentionToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            dateTimeFormatToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            setTimeFormatToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            setDateTimeFormatToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             desktopNotificationsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             freezeKeyColumnsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             manageInstancesToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             repoSettingsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            dateTimeFormatToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            setTimeFormatToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            setDateTimeFormatToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             saveTimeZonePreferenceToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             setAutoRefreshToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             secondsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -72,6 +72,8 @@ namespace DBADashGUI
             tsTimeFilter = new System.Windows.Forms.ToolStripMenuItem();
             tsDayOfWeek = new System.Windows.Forms.ToolStripMenuItem();
             cboTimeZone = new System.Windows.Forms.ToolStripComboBox();
+            tsToggleSingleInstance = new System.Windows.Forms.ToolStripMenuItem();
+            closeChildWindowsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             splitMain = new System.Windows.Forms.SplitContainer();
             tv1 = new System.Windows.Forms.TreeView();
             pnlSearch = new System.Windows.Forms.Panel();
@@ -84,7 +86,7 @@ namespace DBADashGUI
             mnuTags = new System.Windows.Forms.ToolStripDropDownButton();
             groupToolStripMenuItem = new System.Windows.Forms.ToolStripDropDownButton();
             tabs = new ThemedTabControl();
-            tabSnapshotsSummary = new System.Windows.Forms.TabPage();
+            tabSnapshotSummary = new System.Windows.Forms.TabPage();
             schemaSnapshots1 = new DBADashGUI.Changes.SchemaSnapshots();
             tabSchema = new System.Windows.Forms.TabPage();
             splitSchemaSnapshot = new System.Windows.Forms.SplitContainer();
@@ -135,7 +137,7 @@ namespace DBADashGUI
             hardwareChanges1 = new HardwareChanges();
             tabSQLPatching = new System.Windows.Forms.TabPage();
             sqlPatching1 = new SQLPatching();
-            tabInstanceConfig = new System.Windows.Forms.TabPage();
+            tabConfiguration = new System.Windows.Forms.TabPage();
             configurationHistory1 = new ConfigurationHistory();
             tabSlowQueries = new System.Windows.Forms.TabPage();
             slowQueries1 = new SlowQueries();
@@ -151,7 +153,7 @@ namespace DBADashGUI
             azureSummary1 = new DBADashGUI.Performance.AzureSummary();
             tabAzureDB = new System.Windows.Forms.TabPage();
             azureDBResourceStats1 = new DBADashGUI.Performance.AzureDBResourceStats();
-            tabServiceObjectives = new System.Windows.Forms.TabPage();
+            tabAzureServiceObjectives = new System.Windows.Forms.TabPage();
             azureServiceObjectivesHistory1 = new DBADashGUI.Changes.AzureServiceObjectivesHistory();
             tabDBConfiguration = new System.Windows.Forms.TabPage();
             dbConfiguration1 = new DBADashGUI.Changes.DBConfiguration();
@@ -161,7 +163,7 @@ namespace DBADashGUI
             tempDBConfig1 = new DBADashGUI.DBFiles.TempDBConfig();
             tabCustomChecks = new System.Windows.Forms.TabPage();
             customChecks1 = new DBADashGUI.Checks.CustomChecks();
-            tabPC = new System.Windows.Forms.TabPage();
+            tabMetrics = new System.Windows.Forms.TabPage();
             performanceCounterSummary1 = new DBADashGUI.Performance.PerformanceCounterSummary();
             tabObjectExecutionSummary = new System.Windows.Forms.TabPage();
             objectExecutionSummary1 = new DBADashGUI.Performance.ObjectExecutionSummary();
@@ -175,9 +177,9 @@ namespace DBADashGUI
             ag1 = new DBADashGUI.HA.AG();
             tabQS = new System.Windows.Forms.TabPage();
             queryStore1 = new DBADashGUI.Changes.QueryStore();
-            tabRG = new System.Windows.Forms.TabPage();
+            tabResourceGovernor = new System.Windows.Forms.TabPage();
             resourceGovernor1 = new DBADashGUI.Changes.ResourceGovernor();
-            tabAzureDBesourceGovernance = new System.Windows.Forms.TabPage();
+            tabAzureDBResourceGovernance = new System.Windows.Forms.TabPage();
             azureDBResourceGovernance1 = new DBADashGUI.Changes.AzureDBResourceGovernance();
             tabRunningQueries = new System.Windows.Forms.TabPage();
             runningQueries1 = new DBADashGUI.Performance.RunningQueries();
@@ -246,7 +248,7 @@ namespace DBADashGUI
             searchLayout.SuspendLayout();
             toolStrip2.SuspendLayout();
             tabs.SuspendLayout();
-            tabSnapshotsSummary.SuspendLayout();
+            tabSnapshotSummary.SuspendLayout();
             tabSchema.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)splitSchemaSnapshot).BeginInit();
             splitSchemaSnapshot.Panel1.SuspendLayout();
@@ -269,7 +271,7 @@ namespace DBADashGUI
             tabInfo.SuspendLayout();
             tabHardware.SuspendLayout();
             tabSQLPatching.SuspendLayout();
-            tabInstanceConfig.SuspendLayout();
+            tabConfiguration.SuspendLayout();
             tabSlowQueries.SuspendLayout();
             tabTraceFlags.SuspendLayout();
             tabSQLAgentAlerts.SuspendLayout();
@@ -277,20 +279,20 @@ namespace DBADashGUI
             tabDBSpace.SuspendLayout();
             tabAzureSummary.SuspendLayout();
             tabAzureDB.SuspendLayout();
-            tabServiceObjectives.SuspendLayout();
+            tabAzureServiceObjectives.SuspendLayout();
             tabDBConfiguration.SuspendLayout();
             tabDBOptions.SuspendLayout();
             tabTempDB.SuspendLayout();
             tabCustomChecks.SuspendLayout();
-            tabPC.SuspendLayout();
+            tabMetrics.SuspendLayout();
             tabObjectExecutionSummary.SuspendLayout();
             tabWaits.SuspendLayout();
             tabMirroring.SuspendLayout();
             tabJobDDL.SuspendLayout();
             tabAG.SuspendLayout();
             tabQS.SuspendLayout();
-            tabRG.SuspendLayout();
-            tabAzureDBesourceGovernance.SuspendLayout();
+            tabResourceGovernor.SuspendLayout();
+            tabAzureDBResourceGovernance.SuspendLayout();
             tabRunningQueries.SuspendLayout();
             tabMemory.SuspendLayout();
             tabJobStats.SuspendLayout();
@@ -344,15 +346,17 @@ namespace DBADashGUI
             TreeViewImageList.Images.SetKeyName(28, "Report_16x.png");
             TreeViewImageList.Images.SetKeyName(29, "VSO_TeamProjectRepositoryFolder_hoverblue_16x.png");
             TreeViewImageList.Images.SetKeyName(30, "VSO_TeamProject_16x.png");
+            TreeViewImageList.Images.SetKeyName(31, "ServerReport-yellow.png");
             // 
             // menuStrip1
             // 
             menuStrip1.GripMargin = new System.Windows.Forms.Padding(2);
             menuStrip1.ImageScalingSize = new System.Drawing.Size(20, 20);
-            menuStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] { tsConnect, diffToolStripMenuItem, optionsToolStripMenuItem, tsAlert, helpToolStripMenuItem, tsDateRange, tsTimeFilter, tsDayOfWeek, cboTimeZone });
+            menuStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] { tsConnect, diffToolStripMenuItem, optionsToolStripMenuItem, tsAlert, helpToolStripMenuItem, tsDateRange, tsTimeFilter, tsDayOfWeek, cboTimeZone, tsToggleSingleInstance, closeChildWindowsToolStripMenuItem });
             menuStrip1.Location = new System.Drawing.Point(0, 0);
             menuStrip1.Name = "menuStrip1";
             menuStrip1.Padding = new System.Windows.Forms.Padding(3, 1, 0, 1);
+            menuStrip1.ShowItemToolTips = true;
             menuStrip1.Size = new System.Drawing.Size(1955, 30);
             menuStrip1.TabIndex = 1;
             menuStrip1.Text = "menuStrip1";
@@ -390,7 +394,7 @@ namespace DBADashGUI
             // 
             // optionsToolStripMenuItem
             // 
-            optionsToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] { configureDisplayNameToolStripMenuItem, externalDiffToolToolStripMenuItem, dataRetentionToolStripMenuItem, desktopNotificationsToolStripMenuItem, freezeKeyColumnsToolStripMenuItem, manageInstancesToolStripMenuItem, repoSettingsToolStripMenuItem, dateTimeFormatToolStripMenuItem, saveTimeZonePreferenceToolStripMenuItem, setAutoRefreshToolStripMenuItem, showHiddenToolStripMenuItem, themeToolStripMenuItem });
+            optionsToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] { configureDisplayNameToolStripMenuItem, externalDiffToolToolStripMenuItem, dataRetentionToolStripMenuItem, dateTimeFormatToolStripMenuItem, desktopNotificationsToolStripMenuItem, freezeKeyColumnsToolStripMenuItem, manageInstancesToolStripMenuItem, repoSettingsToolStripMenuItem, saveTimeZonePreferenceToolStripMenuItem, setAutoRefreshToolStripMenuItem, showHiddenToolStripMenuItem, themeToolStripMenuItem });
             optionsToolStripMenuItem.Enabled = false;
             optionsToolStripMenuItem.Image = Properties.Resources.SettingsOutline_16x;
             optionsToolStripMenuItem.Name = "optionsToolStripMenuItem";
@@ -418,6 +422,27 @@ namespace DBADashGUI
             dataRetentionToolStripMenuItem.Size = new System.Drawing.Size(276, 26);
             dataRetentionToolStripMenuItem.Text = "Data Retention";
             dataRetentionToolStripMenuItem.Click += DataRetentionToolStripMenuItem_Click;
+            // 
+            // dateTimeFormatToolStripMenuItem
+            // 
+            dateTimeFormatToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] { setTimeFormatToolStripMenuItem, setDateTimeFormatToolStripMenuItem });
+            dateTimeFormatToolStripMenuItem.Name = "dateTimeFormatToolStripMenuItem";
+            dateTimeFormatToolStripMenuItem.Size = new System.Drawing.Size(276, 26);
+            dateTimeFormatToolStripMenuItem.Text = "Date/Time Format";
+            // 
+            // setTimeFormatToolStripMenuItem
+            // 
+            setTimeFormatToolStripMenuItem.Name = "setTimeFormatToolStripMenuItem";
+            setTimeFormatToolStripMenuItem.Size = new System.Drawing.Size(253, 26);
+            setTimeFormatToolStripMenuItem.Text = "Set Time Format";
+            setTimeFormatToolStripMenuItem.Click += setTimeFormatToolStripMenuItem_Click;
+            // 
+            // setDateTimeFormatToolStripMenuItem
+            // 
+            setDateTimeFormatToolStripMenuItem.Name = "setDateTimeFormatToolStripMenuItem";
+            setDateTimeFormatToolStripMenuItem.Size = new System.Drawing.Size(253, 26);
+            setDateTimeFormatToolStripMenuItem.Text = "Set Date && Time Format";
+            setDateTimeFormatToolStripMenuItem.Click += setDateTimeFormatToolStripMenuItem_Click;
             // 
             // desktopNotificationsToolStripMenuItem
             // 
@@ -453,27 +478,6 @@ namespace DBADashGUI
             repoSettingsToolStripMenuItem.Size = new System.Drawing.Size(276, 26);
             repoSettingsToolStripMenuItem.Text = "Repository Settings";
             repoSettingsToolStripMenuItem.Click += RepositorySettings_Click;
-            // 
-            // dateTimeFormatToolStripMenuItem
-            // 
-            dateTimeFormatToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] { setTimeFormatToolStripMenuItem, setDateTimeFormatToolStripMenuItem });
-            dateTimeFormatToolStripMenuItem.Name = "dateTimeFormatToolStripMenuItem";
-            dateTimeFormatToolStripMenuItem.Size = new System.Drawing.Size(276, 26);
-            dateTimeFormatToolStripMenuItem.Text = "Date/Time Format";
-            // 
-            // setTimeFormatToolStripMenuItem
-            // 
-            setTimeFormatToolStripMenuItem.Name = "setTimeFormatToolStripMenuItem";
-            setTimeFormatToolStripMenuItem.Size = new System.Drawing.Size(253, 26);
-            setTimeFormatToolStripMenuItem.Text = "Set Time Format";
-            setTimeFormatToolStripMenuItem.Click += setTimeFormatToolStripMenuItem_Click;
-            // 
-            // setDateTimeFormatToolStripMenuItem
-            // 
-            setDateTimeFormatToolStripMenuItem.Name = "setDateTimeFormatToolStripMenuItem";
-            setDateTimeFormatToolStripMenuItem.Size = new System.Drawing.Size(253, 26);
-            setDateTimeFormatToolStripMenuItem.Text = "Set Date && Time Format";
-            setDateTimeFormatToolStripMenuItem.Click += setDateTimeFormatToolStripMenuItem_Click;
             // 
             // saveTimeZonePreferenceToolStripMenuItem
             // 
@@ -652,6 +656,28 @@ namespace DBADashGUI
             cboTimeZone.Size = new System.Drawing.Size(221, 28);
             cboTimeZone.SelectedIndexChanged += TimeZone_Selected;
             // 
+            // tsToggleSingleInstance
+            // 
+            tsToggleSingleInstance.Alignment = System.Windows.Forms.ToolStripItemAlignment.Right;
+            tsToggleSingleInstance.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
+            tsToggleSingleInstance.Image = Properties.Resources.AppWindow;
+            tsToggleSingleInstance.Name = "tsToggleSingleInstance";
+            tsToggleSingleInstance.Size = new System.Drawing.Size(34, 28);
+            tsToggleSingleInstance.Text = "Toggle single instance child window";
+            tsToggleSingleInstance.ToolTipText = "Toggle single instance child window";
+            tsToggleSingleInstance.Click += ToggleSingleInstancePreference;
+            // 
+            // closeChildWindowsToolStripMenuItem
+            // 
+            closeChildWindowsToolStripMenuItem.Alignment = System.Windows.Forms.ToolStripItemAlignment.Right;
+            closeChildWindowsToolStripMenuItem.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
+            closeChildWindowsToolStripMenuItem.Image = Properties.Resources.CloseGroup_32x;
+            closeChildWindowsToolStripMenuItem.Name = "closeChildWindowsToolStripMenuItem";
+            closeChildWindowsToolStripMenuItem.Size = new System.Drawing.Size(34, 28);
+            closeChildWindowsToolStripMenuItem.Text = "Close all Windows";
+            closeChildWindowsToolStripMenuItem.ToolTipText = "Close all Windows";
+            closeChildWindowsToolStripMenuItem.Click += CloseChildWindows_Click;
+            // 
             // splitMain
             // 
             splitMain.AccessibleRole = System.Windows.Forms.AccessibleRole.ScrollBar;
@@ -805,7 +831,7 @@ namespace DBADashGUI
             // 
             // tabs
             // 
-            tabs.Controls.Add(tabSnapshotsSummary);
+            tabs.Controls.Add(tabSnapshotSummary);
             tabs.Controls.Add(tabSchema);
             tabs.Controls.Add(tabTags);
             tabs.Controls.Add(tabDrives);
@@ -822,7 +848,7 @@ namespace DBADashGUI
             tabs.Controls.Add(tabInfo);
             tabs.Controls.Add(tabHardware);
             tabs.Controls.Add(tabSQLPatching);
-            tabs.Controls.Add(tabInstanceConfig);
+            tabs.Controls.Add(tabConfiguration);
             tabs.Controls.Add(tabSlowQueries);
             tabs.Controls.Add(tabTraceFlags);
             tabs.Controls.Add(tabSQLAgentAlerts);
@@ -830,20 +856,20 @@ namespace DBADashGUI
             tabs.Controls.Add(tabDBSpace);
             tabs.Controls.Add(tabAzureSummary);
             tabs.Controls.Add(tabAzureDB);
-            tabs.Controls.Add(tabServiceObjectives);
+            tabs.Controls.Add(tabAzureServiceObjectives);
             tabs.Controls.Add(tabDBConfiguration);
             tabs.Controls.Add(tabDBOptions);
             tabs.Controls.Add(tabTempDB);
             tabs.Controls.Add(tabCustomChecks);
-            tabs.Controls.Add(tabPC);
+            tabs.Controls.Add(tabMetrics);
             tabs.Controls.Add(tabObjectExecutionSummary);
             tabs.Controls.Add(tabWaits);
             tabs.Controls.Add(tabMirroring);
             tabs.Controls.Add(tabJobDDL);
             tabs.Controls.Add(tabAG);
             tabs.Controls.Add(tabQS);
-            tabs.Controls.Add(tabRG);
-            tabs.Controls.Add(tabAzureDBesourceGovernance);
+            tabs.Controls.Add(tabResourceGovernor);
+            tabs.Controls.Add(tabAzureDBResourceGovernance);
             tabs.Controls.Add(tabRunningQueries);
             tabs.Controls.Add(tabMemory);
             tabs.Controls.Add(tabJobStats);
@@ -871,17 +897,17 @@ namespace DBADashGUI
             tabs.Tag = "";
             tabs.SelectedIndexChanged += Tabs_SelectedIndexChanged;
             // 
-            // tabSnapshotsSummary
+            // tabSnapshotSummary
             // 
-            tabSnapshotsSummary.Controls.Add(schemaSnapshots1);
-            tabSnapshotsSummary.Location = new System.Drawing.Point(4, 39);
-            tabSnapshotsSummary.Margin = new System.Windows.Forms.Padding(3, 5, 3, 5);
-            tabSnapshotsSummary.Name = "tabSnapshotsSummary";
-            tabSnapshotsSummary.Padding = new System.Windows.Forms.Padding(3, 5, 3, 5);
-            tabSnapshotsSummary.Size = new System.Drawing.Size(1578, 955);
-            tabSnapshotsSummary.TabIndex = 1;
-            tabSnapshotsSummary.Text = "Snapshot Summary";
-            tabSnapshotsSummary.UseVisualStyleBackColor = true;
+            tabSnapshotSummary.Controls.Add(schemaSnapshots1);
+            tabSnapshotSummary.Location = new System.Drawing.Point(4, 39);
+            tabSnapshotSummary.Margin = new System.Windows.Forms.Padding(3, 5, 3, 5);
+            tabSnapshotSummary.Name = "tabSnapshotSummary";
+            tabSnapshotSummary.Padding = new System.Windows.Forms.Padding(3, 5, 3, 5);
+            tabSnapshotSummary.Size = new System.Drawing.Size(1578, 955);
+            tabSnapshotSummary.TabIndex = 1;
+            tabSnapshotSummary.Text = "Snapshot Summary";
+            tabSnapshotSummary.UseVisualStyleBackColor = true;
             // 
             // schemaSnapshots1
             // 
@@ -932,9 +958,9 @@ namespace DBADashGUI
             label7.Location = new System.Drawing.Point(101, 281);
             label7.Margin = new System.Windows.Forms.Padding(1, 0, 1, 0);
             label7.Name = "label7";
-            label7.Size = new System.Drawing.Size(351, 20);
+            label7.Size = new System.Drawing.Size(364, 20);
             label7.TabIndex = 1;
-            label7.Text = "Diff (Loaded programatically due to designer issue)";
+            label7.Text = "Diff (Loaded programmatically due to designer issue)";
             label7.Visible = false;
             // 
             // toolStrip1
@@ -1140,10 +1166,6 @@ namespace DBADashGUI
             // drivesControl1
             // 
             drivesControl1.Dock = System.Windows.Forms.DockStyle.Fill;
-            drivesControl1.IncludeCritical = true;
-            drivesControl1.IncludeNA = true;
-            drivesControl1.IncludeOK = true;
-            drivesControl1.IncludeWarning = true;
             drivesControl1.Location = new System.Drawing.Point(1, 2);
             drivesControl1.Margin = new System.Windows.Forms.Padding(1, 3, 1, 3);
             drivesControl1.Name = "drivesControl1";
@@ -1166,10 +1188,6 @@ namespace DBADashGUI
             // backupsControl1
             // 
             backupsControl1.Dock = System.Windows.Forms.DockStyle.Fill;
-            backupsControl1.IncludeCritical = true;
-            backupsControl1.IncludeNA = true;
-            backupsControl1.IncludeOK = true;
-            backupsControl1.IncludeWarning = true;
             backupsControl1.Location = new System.Drawing.Point(1, 2);
             backupsControl1.Margin = new System.Windows.Forms.Padding(1, 3, 1, 3);
             backupsControl1.Name = "backupsControl1";
@@ -1191,10 +1209,6 @@ namespace DBADashGUI
             // logShippingControl1
             // 
             logShippingControl1.Dock = System.Windows.Forms.DockStyle.Fill;
-            logShippingControl1.IncludeCritical = true;
-            logShippingControl1.IncludeNA = true;
-            logShippingControl1.IncludeOK = true;
-            logShippingControl1.IncludeWarning = true;
             logShippingControl1.Location = new System.Drawing.Point(1, 2);
             logShippingControl1.Margin = new System.Windows.Forms.Padding(1, 3, 1, 3);
             logShippingControl1.Name = "logShippingControl1";
@@ -1216,15 +1230,9 @@ namespace DBADashGUI
             // agentJobsControl1
             // 
             agentJobsControl1.Dock = System.Windows.Forms.DockStyle.Fill;
-            agentJobsControl1.IncludeAcknowledged = true;
-            agentJobsControl1.IncludeCritical = false;
-            agentJobsControl1.IncludeNA = false;
-            agentJobsControl1.IncludeOK = false;
-            agentJobsControl1.IncludeWarning = false;
             agentJobsControl1.Location = new System.Drawing.Point(1, 2);
             agentJobsControl1.Margin = new System.Windows.Forms.Padding(1, 2, 1, 2);
             agentJobsControl1.Name = "agentJobsControl1";
-            agentJobsControl1.ShowSteps = false;
             agentJobsControl1.Size = new System.Drawing.Size(190, 53);
             agentJobsControl1.TabIndex = 0;
             // 
@@ -1265,10 +1273,6 @@ namespace DBADashGUI
             // dbFilesControl1
             // 
             dbFilesControl1.Dock = System.Windows.Forms.DockStyle.Fill;
-            dbFilesControl1.IncludeCritical = true;
-            dbFilesControl1.IncludeNA = true;
-            dbFilesControl1.IncludeOK = true;
-            dbFilesControl1.IncludeWarning = true;
             dbFilesControl1.Location = new System.Drawing.Point(1, 2);
             dbFilesControl1.Margin = new System.Windows.Forms.Padding(1, 3, 1, 3);
             dbFilesControl1.Name = "dbFilesControl1";
@@ -1290,10 +1294,6 @@ namespace DBADashGUI
             // lastGoodCheckDBControl1
             // 
             lastGoodCheckDBControl1.Dock = System.Windows.Forms.DockStyle.Fill;
-            lastGoodCheckDBControl1.IncludeCritical = true;
-            lastGoodCheckDBControl1.IncludeNA = true;
-            lastGoodCheckDBControl1.IncludeOK = true;
-            lastGoodCheckDBControl1.IncludeWarning = true;
             lastGoodCheckDBControl1.Location = new System.Drawing.Point(1, 2);
             lastGoodCheckDBControl1.Margin = new System.Windows.Forms.Padding(1, 3, 1, 3);
             lastGoodCheckDBControl1.Name = "lastGoodCheckDBControl1";
@@ -1336,7 +1336,6 @@ namespace DBADashGUI
             // 
             // collectionErrors1
             // 
-            collectionErrors1.AckErrors = false;
             collectionErrors1.Days = 0;
             collectionErrors1.Dock = System.Windows.Forms.DockStyle.Fill;
             collectionErrors1.Location = new System.Drawing.Point(1, 2);
@@ -1360,10 +1359,6 @@ namespace DBADashGUI
             // collectionDates1
             // 
             collectionDates1.Dock = System.Windows.Forms.DockStyle.Fill;
-            collectionDates1.IncludeCritical = true;
-            collectionDates1.IncludeNA = true;
-            collectionDates1.IncludeOK = true;
-            collectionDates1.IncludeWarning = true;
             collectionDates1.Location = new System.Drawing.Point(1, 2);
             collectionDates1.Margin = new System.Windows.Forms.Padding(1, 3, 1, 3);
             collectionDates1.Name = "collectionDates1";
@@ -1455,17 +1450,17 @@ namespace DBADashGUI
             sqlPatching1.Size = new System.Drawing.Size(190, 53);
             sqlPatching1.TabIndex = 0;
             // 
-            // tabInstanceConfig
+            // tabConfiguration
             // 
-            tabInstanceConfig.Controls.Add(configurationHistory1);
-            tabInstanceConfig.Location = new System.Drawing.Point(4, 39);
-            tabInstanceConfig.Margin = new System.Windows.Forms.Padding(1, 2, 1, 2);
-            tabInstanceConfig.Name = "tabInstanceConfig";
-            tabInstanceConfig.Padding = new System.Windows.Forms.Padding(1, 2, 1, 2);
-            tabInstanceConfig.Size = new System.Drawing.Size(192, 57);
-            tabInstanceConfig.TabIndex = 17;
-            tabInstanceConfig.Text = "Configuration";
-            tabInstanceConfig.UseVisualStyleBackColor = true;
+            tabConfiguration.Controls.Add(configurationHistory1);
+            tabConfiguration.Location = new System.Drawing.Point(4, 39);
+            tabConfiguration.Margin = new System.Windows.Forms.Padding(1, 2, 1, 2);
+            tabConfiguration.Name = "tabConfiguration";
+            tabConfiguration.Padding = new System.Windows.Forms.Padding(1, 2, 1, 2);
+            tabConfiguration.Size = new System.Drawing.Size(192, 57);
+            tabConfiguration.TabIndex = 17;
+            tabConfiguration.Text = "Configuration";
+            tabConfiguration.UseVisualStyleBackColor = true;
             // 
             // configurationHistory1
             // 
@@ -1538,7 +1533,6 @@ namespace DBADashGUI
             alerts1.Name = "alerts1";
             alerts1.Size = new System.Drawing.Size(190, 53);
             alerts1.TabIndex = 0;
-            alerts1.UseAlertName = false;
             // 
             // tabDrivers
             // 
@@ -1625,17 +1619,17 @@ namespace DBADashGUI
             azureDBResourceStats1.Size = new System.Drawing.Size(190, 53);
             azureDBResourceStats1.TabIndex = 0;
             // 
-            // tabServiceObjectives
+            // tabAzureServiceObjectives
             // 
-            tabServiceObjectives.Controls.Add(azureServiceObjectivesHistory1);
-            tabServiceObjectives.Location = new System.Drawing.Point(4, 39);
-            tabServiceObjectives.Margin = new System.Windows.Forms.Padding(1, 2, 1, 2);
-            tabServiceObjectives.Name = "tabServiceObjectives";
-            tabServiceObjectives.Padding = new System.Windows.Forms.Padding(1, 2, 1, 2);
-            tabServiceObjectives.Size = new System.Drawing.Size(192, 57);
-            tabServiceObjectives.TabIndex = 25;
-            tabServiceObjectives.Text = "Azure Service Objectives";
-            tabServiceObjectives.UseVisualStyleBackColor = true;
+            tabAzureServiceObjectives.Controls.Add(azureServiceObjectivesHistory1);
+            tabAzureServiceObjectives.Location = new System.Drawing.Point(4, 39);
+            tabAzureServiceObjectives.Margin = new System.Windows.Forms.Padding(1, 2, 1, 2);
+            tabAzureServiceObjectives.Name = "tabAzureServiceObjectives";
+            tabAzureServiceObjectives.Padding = new System.Windows.Forms.Padding(1, 2, 1, 2);
+            tabAzureServiceObjectives.Size = new System.Drawing.Size(192, 57);
+            tabAzureServiceObjectives.TabIndex = 25;
+            tabAzureServiceObjectives.Text = "Azure Service Objectives";
+            tabAzureServiceObjectives.UseVisualStyleBackColor = true;
             // 
             // azureServiceObjectivesHistory1
             // 
@@ -1686,7 +1680,6 @@ namespace DBADashGUI
             dbOptions1.Margin = new System.Windows.Forms.Padding(1, 3, 1, 3);
             dbOptions1.Name = "dbOptions1";
             dbOptions1.Size = new System.Drawing.Size(190, 53);
-            dbOptions1.SummaryMode = false;
             dbOptions1.TabIndex = 0;
             // 
             // tabTempDB
@@ -1724,12 +1717,7 @@ namespace DBADashGUI
             // 
             // customChecks1
             // 
-            customChecks1.CheckContext = null;
             customChecks1.Dock = System.Windows.Forms.DockStyle.Fill;
-            customChecks1.IncludeCritical = true;
-            customChecks1.IncludeNA = false;
-            customChecks1.IncludeOK = false;
-            customChecks1.IncludeWarning = true;
             customChecks1.Location = new System.Drawing.Point(1, 2);
             customChecks1.Margin = new System.Windows.Forms.Padding(1, 3, 1, 3);
             customChecks1.Name = "customChecks1";
@@ -1737,17 +1725,17 @@ namespace DBADashGUI
             customChecks1.TabIndex = 0;
             customChecks1.Test = null;
             // 
-            // tabPC
+            // tabMetrics
             // 
-            tabPC.Controls.Add(performanceCounterSummary1);
-            tabPC.Location = new System.Drawing.Point(4, 39);
-            tabPC.Margin = new System.Windows.Forms.Padding(1, 2, 1, 2);
-            tabPC.Name = "tabPC";
-            tabPC.Padding = new System.Windows.Forms.Padding(1, 2, 1, 2);
-            tabPC.Size = new System.Drawing.Size(192, 57);
-            tabPC.TabIndex = 30;
-            tabPC.Text = "Metrics";
-            tabPC.UseVisualStyleBackColor = true;
+            tabMetrics.Controls.Add(performanceCounterSummary1);
+            tabMetrics.Location = new System.Drawing.Point(4, 39);
+            tabMetrics.Margin = new System.Windows.Forms.Padding(1, 2, 1, 2);
+            tabMetrics.Name = "tabMetrics";
+            tabMetrics.Padding = new System.Windows.Forms.Padding(1, 2, 1, 2);
+            tabMetrics.Size = new System.Drawing.Size(192, 57);
+            tabMetrics.TabIndex = 30;
+            tabMetrics.Text = "Metrics";
+            tabMetrics.UseVisualStyleBackColor = true;
             // 
             // performanceCounterSummary1
             // 
@@ -1778,8 +1766,6 @@ namespace DBADashGUI
             objectExecutionSummary1.Name = "objectExecutionSummary1";
             objectExecutionSummary1.Size = new System.Drawing.Size(190, 53);
             objectExecutionSummary1.TabIndex = 0;
-            objectExecutionSummary1.Types = "";
-            objectExecutionSummary1.UseGlobalTime = true;
             // 
             // tabWaits
             // 
@@ -1822,7 +1808,6 @@ namespace DBADashGUI
             mirroring1.Margin = new System.Windows.Forms.Padding(1, 3, 1, 3);
             mirroring1.Name = "mirroring1";
             mirroring1.Size = new System.Drawing.Size(190, 53);
-            mirroring1.SummaryMode = true;
             mirroring1.TabIndex = 0;
             // 
             // tabJobDDL
@@ -1862,7 +1847,7 @@ namespace DBADashGUI
             // 
             ag1.Dock = System.Windows.Forms.DockStyle.Fill;
             ag1.Location = new System.Drawing.Point(1, 2);
-            ag1.Margin = new System.Windows.Forms.Padding(1, 3, 1, 3);
+            ag1.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
             ag1.Name = "ag1";
             ag1.Size = new System.Drawing.Size(190, 53);
             ag1.TabIndex = 0;
@@ -1888,17 +1873,17 @@ namespace DBADashGUI
             queryStore1.Size = new System.Drawing.Size(190, 53);
             queryStore1.TabIndex = 0;
             // 
-            // tabRG
+            // tabResourceGovernor
             // 
-            tabRG.Controls.Add(resourceGovernor1);
-            tabRG.Location = new System.Drawing.Point(4, 39);
-            tabRG.Margin = new System.Windows.Forms.Padding(1, 2, 1, 2);
-            tabRG.Name = "tabRG";
-            tabRG.Padding = new System.Windows.Forms.Padding(1, 2, 1, 2);
-            tabRG.Size = new System.Drawing.Size(192, 57);
-            tabRG.TabIndex = 37;
-            tabRG.Text = "Resource Governor";
-            tabRG.UseVisualStyleBackColor = true;
+            tabResourceGovernor.Controls.Add(resourceGovernor1);
+            tabResourceGovernor.Location = new System.Drawing.Point(4, 39);
+            tabResourceGovernor.Margin = new System.Windows.Forms.Padding(1, 2, 1, 2);
+            tabResourceGovernor.Name = "tabResourceGovernor";
+            tabResourceGovernor.Padding = new System.Windows.Forms.Padding(1, 2, 1, 2);
+            tabResourceGovernor.Size = new System.Drawing.Size(192, 57);
+            tabResourceGovernor.TabIndex = 37;
+            tabResourceGovernor.Text = "Resource Governor";
+            tabResourceGovernor.UseVisualStyleBackColor = true;
             // 
             // resourceGovernor1
             // 
@@ -1909,17 +1894,17 @@ namespace DBADashGUI
             resourceGovernor1.Size = new System.Drawing.Size(190, 53);
             resourceGovernor1.TabIndex = 0;
             // 
-            // tabAzureDBesourceGovernance
+            // tabAzureDBResourceGovernance
             // 
-            tabAzureDBesourceGovernance.Controls.Add(azureDBResourceGovernance1);
-            tabAzureDBesourceGovernance.Location = new System.Drawing.Point(4, 39);
-            tabAzureDBesourceGovernance.Margin = new System.Windows.Forms.Padding(1, 2, 1, 2);
-            tabAzureDBesourceGovernance.Name = "tabAzureDBesourceGovernance";
-            tabAzureDBesourceGovernance.Padding = new System.Windows.Forms.Padding(1, 2, 1, 2);
-            tabAzureDBesourceGovernance.Size = new System.Drawing.Size(192, 57);
-            tabAzureDBesourceGovernance.TabIndex = 38;
-            tabAzureDBesourceGovernance.Text = "Azure Resource Governance";
-            tabAzureDBesourceGovernance.UseVisualStyleBackColor = true;
+            tabAzureDBResourceGovernance.Controls.Add(azureDBResourceGovernance1);
+            tabAzureDBResourceGovernance.Location = new System.Drawing.Point(4, 39);
+            tabAzureDBResourceGovernance.Margin = new System.Windows.Forms.Padding(1, 2, 1, 2);
+            tabAzureDBResourceGovernance.Name = "tabAzureDBResourceGovernance";
+            tabAzureDBResourceGovernance.Padding = new System.Windows.Forms.Padding(1, 2, 1, 2);
+            tabAzureDBResourceGovernance.Size = new System.Drawing.Size(192, 57);
+            tabAzureDBResourceGovernance.TabIndex = 38;
+            tabAzureDBResourceGovernance.Text = "Azure Resource Governance";
+            tabAzureDBResourceGovernance.UseVisualStyleBackColor = true;
             // 
             // azureDBResourceGovernance1
             // 
@@ -1992,7 +1977,6 @@ namespace DBADashGUI
             jobStats1.Name = "jobStats1";
             jobStats1.Size = new System.Drawing.Size(190, 53);
             jobStats1.TabIndex = 0;
-            jobStats1.UseGlobalTime = true;
             // 
             // tabDBADash
             // 
@@ -2063,10 +2047,6 @@ namespace DBADashGUI
             // identityColumns1
             // 
             identityColumns1.Dock = System.Windows.Forms.DockStyle.Fill;
-            identityColumns1.IncludeCritical = true;
-            identityColumns1.IncludeNA = false;
-            identityColumns1.IncludeOK = false;
-            identityColumns1.IncludeWarning = true;
             identityColumns1.Location = new System.Drawing.Point(1, 2);
             identityColumns1.Margin = new System.Windows.Forms.Padding(1);
             identityColumns1.Name = "identityColumns1";
@@ -2115,7 +2095,6 @@ namespace DBADashGUI
             jobTimeline1.Name = "jobTimeline1";
             jobTimeline1.Size = new System.Drawing.Size(190, 53);
             jobTimeline1.TabIndex = 0;
-            jobTimeline1.UseGlobalTime = true;
             // 
             // tabDrivePerformance
             // 
@@ -2181,7 +2160,6 @@ namespace DBADashGUI
             customReportView1.Location = new System.Drawing.Point(1, 2);
             customReportView1.Margin = new System.Windows.Forms.Padding(1);
             customReportView1.Name = "customReportView1";
-            customReportView1.Report = null;
             customReportView1.Size = new System.Drawing.Size(190, 53);
             customReportView1.TabIndex = 0;
             // 
@@ -2224,11 +2202,8 @@ namespace DBADashGUI
             queryStoreTop.Location = new System.Drawing.Point(1, 2);
             queryStoreTop.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
             queryStoreTop.Name = "queryStoreTop";
-            queryStoreTop.PlanHash = null;
-            queryStoreTop.QueryHash = null;
             queryStoreTop.Size = new System.Drawing.Size(190, 53);
             queryStoreTop.TabIndex = 0;
-            queryStoreTop.UseGlobalTime = true;
             // 
             // tabQueryStoreForcedPlans
             // 
@@ -2564,7 +2539,7 @@ namespace DBADashGUI
             toolStrip2.ResumeLayout(false);
             toolStrip2.PerformLayout();
             tabs.ResumeLayout(false);
-            tabSnapshotsSummary.ResumeLayout(false);
+            tabSnapshotSummary.ResumeLayout(false);
             tabSchema.ResumeLayout(false);
             splitSchemaSnapshot.Panel1.ResumeLayout(false);
             splitSchemaSnapshot.Panel1.PerformLayout();
@@ -2590,7 +2565,7 @@ namespace DBADashGUI
             tabInfo.ResumeLayout(false);
             tabHardware.ResumeLayout(false);
             tabSQLPatching.ResumeLayout(false);
-            tabInstanceConfig.ResumeLayout(false);
+            tabConfiguration.ResumeLayout(false);
             tabSlowQueries.ResumeLayout(false);
             tabTraceFlags.ResumeLayout(false);
             tabSQLAgentAlerts.ResumeLayout(false);
@@ -2598,20 +2573,20 @@ namespace DBADashGUI
             tabDBSpace.ResumeLayout(false);
             tabAzureSummary.ResumeLayout(false);
             tabAzureDB.ResumeLayout(false);
-            tabServiceObjectives.ResumeLayout(false);
+            tabAzureServiceObjectives.ResumeLayout(false);
             tabDBConfiguration.ResumeLayout(false);
             tabDBOptions.ResumeLayout(false);
             tabTempDB.ResumeLayout(false);
             tabCustomChecks.ResumeLayout(false);
-            tabPC.ResumeLayout(false);
+            tabMetrics.ResumeLayout(false);
             tabObjectExecutionSummary.ResumeLayout(false);
             tabWaits.ResumeLayout(false);
             tabMirroring.ResumeLayout(false);
             tabJobDDL.ResumeLayout(false);
             tabAG.ResumeLayout(false);
             tabQS.ResumeLayout(false);
-            tabRG.ResumeLayout(false);
-            tabAzureDBesourceGovernance.ResumeLayout(false);
+            tabResourceGovernor.ResumeLayout(false);
+            tabAzureDBResourceGovernance.ResumeLayout(false);
             tabRunningQueries.ResumeLayout(false);
             tabMemory.ResumeLayout(false);
             tabJobStats.ResumeLayout(false);
@@ -2638,7 +2613,7 @@ namespace DBADashGUI
         private System.Windows.Forms.SplitContainer splitMain;
         private ThemedTabControl tabs;
         private System.Windows.Forms.TabPage tabSchema;
-        private System.Windows.Forms.TabPage tabSnapshotsSummary;
+        private System.Windows.Forms.TabPage tabSnapshotSummary;
         private System.Windows.Forms.ImageList TreeViewImageList;
         private System.Windows.Forms.SplitContainer splitSchemaSnapshot;
         private System.Windows.Forms.DataGridView gvHistory;
@@ -2677,7 +2652,7 @@ namespace DBADashGUI
         private HardwareChanges hardwareChanges1;
         private System.Windows.Forms.TabPage tabSQLPatching;
         private SQLPatching sqlPatching1;
-        private System.Windows.Forms.TabPage tabInstanceConfig;
+        private System.Windows.Forms.TabPage tabConfiguration;
         private ConfigurationHistory configurationHistory1;
         private System.Windows.Forms.TabPage tabSlowQueries;
         private SlowQueries slowQueries1;
@@ -2718,7 +2693,7 @@ namespace DBADashGUI
         private System.Windows.Forms.DataGridViewTextBoxColumn dataGridViewTextBoxColumn23;
         private System.Windows.Forms.TabPage tabAzureDB;
         private Performance.AzureDBResourceStats azureDBResourceStats1;
-        private System.Windows.Forms.TabPage tabServiceObjectives;
+        private System.Windows.Forms.TabPage tabAzureServiceObjectives;
         private Changes.AzureServiceObjectivesHistory azureServiceObjectivesHistory1;
         private System.Windows.Forms.TabPage tabDBConfiguration;
         private Changes.DBConfiguration dbConfiguration1;
@@ -2728,7 +2703,7 @@ namespace DBADashGUI
         private DBFiles.TempDBConfig tempDBConfig1;
         private System.Windows.Forms.TabPage tabCustomChecks;
         private Checks.CustomChecks customChecks1;
-        private System.Windows.Forms.TabPage tabPC;
+        private System.Windows.Forms.TabPage tabMetrics;
         private Performance.PerformanceCounterSummary performanceCounterSummary1;
         private CollectionDates.CollectionErrors collectionErrors1;
         private System.Windows.Forms.TabPage tabObjectExecutionSummary;
@@ -2742,12 +2717,11 @@ namespace DBADashGUI
         private System.Windows.Forms.TabPage tabJobDDL;
         private Changes.JobDDLHistory jobDDLHistory1;
         private System.Windows.Forms.TabPage tabAG;
-        private HA.AG ag1;
         private System.Windows.Forms.TabPage tabQS;
         private Changes.QueryStore queryStore1;
-        private System.Windows.Forms.TabPage tabRG;
+        private System.Windows.Forms.TabPage tabResourceGovernor;
         private Changes.ResourceGovernor resourceGovernor1;
-        private System.Windows.Forms.TabPage tabAzureDBesourceGovernance;
+        private System.Windows.Forms.TabPage tabAzureDBResourceGovernance;
         private Changes.AzureDBResourceGovernance azureDBResourceGovernance1;
         private System.Windows.Forms.TabPage tabRunningQueries;
         private Performance.RunningQueries runningQueries1;
@@ -2835,5 +2809,8 @@ namespace DBADashGUI
         private System.Windows.Forms.ToolStripMenuItem setDateTimeFormatToolStripMenuItem;
         private Performance.Performance performance1;
         private DateRangeToolStripMenuItem tsDateRange;
+        private HA.AG ag1;
+        private System.Windows.Forms.ToolStripMenuItem tsToggleSingleInstance;
+        private System.Windows.Forms.ToolStripMenuItem closeChildWindowsToolStripMenuItem;
     }
 }

@@ -1,4 +1,5 @@
-﻿using DBADash;
+﻿using AsyncKeyedLock;
+using DBADash;
 using DBADash.InstanceMetadata;
 using DBADash.Messaging;
 using Microsoft.Extensions.Hosting;
@@ -30,7 +31,7 @@ namespace DBADashService
         private System.Timers.Timer folderCleanupTimer;
         private readonly CollectionSchedules schedules;
         private MessageProcessing messageProcessing;
-        public static readonly ConcurrentDictionary<string, SemaphoreSlim> Locker = new();
+        public static readonly AsyncKeyedLocker<string> Locker = new();
 
         private static readonly ResiliencePipeline pipeline = new ResiliencePipelineBuilder()
             .AddRetry(new RetryStrategyOptions
@@ -97,7 +98,7 @@ namespace DBADashService
                     var count = 0;
                     do
                     {
-                        status = DBValidations.VersionStatus(d.ConnectionString);
+                        status = await DBValidations.VersionStatusAsync(d.ConnectionString);
                         if (!status.DeployInProgress) break; // Exit if deployment is not in progress
                         if (DateTime.UtcNow >=
                             endTime) // We've waited long enough.  It's possible that a previous upgrade was interrupted.
@@ -148,7 +149,7 @@ namespace DBADashService
 
                     case DBValidations.DBVersionStatusEnum.CreateDB when config.AutoUpdateDatabase:
                         Log.Information("Validating destination");
-                        CollectionConfig.ValidateDestination(d);
+                        await CollectionConfig.ValidateDestinationAsync(d);
                         Log.Information("Create repository database");
                         await DBValidations.UpgradeDBAsync(d.ConnectionString);
                         Log.Information("Repository database created");
@@ -159,10 +160,10 @@ namespace DBADashService
                     case DBValidations.DBVersionStatusEnum.UpgradeRequired when config.AutoUpdateDatabase:
                         {
                             Log.Information("Validating destination");
-                            CollectionConfig.ValidateDestination(d);
+                            await CollectionConfig.ValidateDestinationAsync(d);
                             Log.Information("Upgrade DB from {oldVersion} to {newVersion}", status.DBVersion.ToString(), status.DACVersion.ToString());
                             await DBValidations.UpgradeDBAsync(d.ConnectionString);
-                            status = DBValidations.VersionStatus(d.ConnectionString);
+                            status = await DBValidations.VersionStatusAsync(d.ConnectionString);
                             if (status.VersionStatus == DBValidations.DBVersionStatusEnum.OK)
                             {
                                 Log.Information("Repository DB upgrade completed");
@@ -247,7 +248,7 @@ namespace DBADashService
             {
                 Log.Information("Updating BuildReference {connection}", d.ConnectionForPrint);
                 var jsonBuildReference = await File.ReadAllTextAsync(filePath);
-                await BuildReference.UpdateBuildReference(d.ConnectionString, jsonBuildReference);
+                await BuildReference.UpdateBuildReferenceAsync(d.ConnectionString, jsonBuildReference);
             }
             Log.Debug("Remove {filePath}", filePath);
             File.Delete(filePath);

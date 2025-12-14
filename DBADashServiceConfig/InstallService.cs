@@ -11,6 +11,7 @@ using System.ServiceProcess;
 using System.Windows.Forms;
 using DBADashGUI;
 using DBADashGUI.SchemaCompare;
+using System.ComponentModel;
 
 namespace DBADashServiceConfig
 {
@@ -22,6 +23,7 @@ namespace DBADashServiceConfig
             this.ApplyTheme();
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Visible)]
         public string ServiceName { get; set; }
 
         private bool InstallDBADashService()
@@ -90,7 +92,22 @@ namespace DBADashServiceConfig
 
                     break;
             }
-
+            try
+            {
+                if (!LsaUtility.HasLogOnAsServiceRight(username))
+                {
+                    LsaUtility.GrantLogOnAsService(username);
+                    MessageBox.Show($"Logon as a service rights granted to `{username}`", "Grant", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                var buttons = new TaskDialogButtonCollection() { TaskDialogButton.Yes, TaskDialogButton.No };
+                if (CommonShared.ShowExceptionDialog(ex, $"Error granting logon as a service rights to `{username}`\n\nThe service will fail to run if it doesn't have logon as a service rights.  The rights can be granted manually using gpedit.msc (Computer Configuration\\Windows Settings\\Security Settings\\Local Policies\\User Rights Assignment).\n\nWould you like to proceed with the install?", default, default, default, buttons) != TaskDialogButton.Yes)
+                {
+                    return false;
+                }
+            }
             try
             {
                 var result = ServiceTools.InstallService(ServiceName, username, password);
@@ -180,7 +197,7 @@ namespace DBADashServiceConfig
         {
             var script = ReadResourceString("CreateMSA.ps1");
             var frm = new CodeViewer() { Language = CodeEditor.CodeEditorModes.PowerShell, Code = script };
-            frm.Show();
+            frm.ShowSingleInstance();
         }
 
         public string ReadResourceString(string name)

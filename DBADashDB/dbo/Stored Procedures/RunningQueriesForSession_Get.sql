@@ -84,7 +84,11 @@ SELECT InstanceID,
        is_implicit_transaction,
        is_query_store_on,
        tempdb_current_mb,
-       tempdb_allocations_mb 
+       tempdb_allocations_mb,
+       total_elapsed_time,
+       TaskWaits,
+       dop,
+       cursor_text
 FROM dbo.RunningQueriesInfo Q
 WHERE Q.SnapshotDateUTC >= @SnapshotDateFrom 
 AND Q.SnapshotDateUTC < @SnapshotDateTo

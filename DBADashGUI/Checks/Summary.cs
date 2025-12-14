@@ -1,6 +1,5 @@
 ﻿using DBADashGUI.Checks;
 using Humanizer;
-using Humanizer.Localisation;
 using Microsoft.Data.SqlClient;
 using System;
 using System.Collections.Generic;
@@ -61,14 +60,13 @@ namespace DBADashGUI
         private DBADashContext context;
         private bool ShowHidden => context.InstanceIDs.Count == 1 || Common.ShowHidden;
 
-        private CorruptionViewer CorruptionFrm;
         private bool WasRefreshed;
 
-        private readonly Dictionary<string, string> tabMapping = new() { { "FullBackupStatus", "tabBackups" }, { "LogShippingStatus", "tabLogShipping" }, { "DiffBackupStatus", "tabBackups" }, { "LogBackupStatus", "tabBackups" }, { "DriveStatus", "tabDrives" },
-                                                            { "JobStatus", "tabJobs" }, { "CollectionErrorStatus", "tabDBADashErrorLog"}, { "AGStatus", "tabAG" }, {"LastGoodCheckDBStatus","tabLastGood"}, {"SnapshotAgeStatus","tabCollectionDates"  },
-                                                            {"MemoryDumpStatus","" }, {"UptimeStatus","" }, {"CorruptionStatus","" }, {"AlertStatus","tabSQLAgentAlerts" }, {"FileFreeSpaceStatus","tabFiles" },
-                                                            {"CustomCheckStatus","tabCustomChecks"  }, {"MirroringStatus","tabMirroring" },{"ElasticPoolStorageStatus","tabAzureSummary"},{"PctMaxSizeStatus","tabFiles"}, {"QueryStoreStatus","tabQS" },
-                                                            {"LogFreeSpaceStatus","tabFiles"},{"DBMailStatus","" },{"IdentityStatus","tabIdentityColumns"  }, {"IsAgentRunningStatus","" },{"DatabaseStateStatus","tabDBOptions" }};
+        private readonly Dictionary<string, Tabs?> tabMapping = new() { { "FullBackupStatus",Tabs.Backups }, { "LogShippingStatus", Tabs.LogShipping}, { "DiffBackupStatus", Tabs.Backups }, { "LogBackupStatus", Tabs.Backups }, { "DriveStatus", Tabs.Drives },
+                                                            { "JobStatus", Tabs.Jobs }, { "CollectionErrorStatus", Tabs.DBADashErrorLog}, { "AGStatus", Tabs.AG }, {"LastGoodCheckDBStatus", Tabs.LastGood}, {"SnapshotAgeStatus",Tabs.CollectionDates  },
+                                                            {"MemoryDumpStatus", null}, {"UptimeStatus",null}, {"CorruptionStatus",null }, {"AlertStatus",Tabs.SQLAgentAlerts }, {"FileFreeSpaceStatus", Tabs.Files },
+                                                            {"CustomCheckStatus",Tabs.CustomChecks  }, {"MirroringStatus",Tabs.Mirroring },{"ElasticPoolStorageStatus",Tabs.AzureSummary},{"PctMaxSizeStatus",Tabs.Files}, {"QueryStoreStatus",Tabs.QS },
+                                                            {"LogFreeSpaceStatus",Tabs.Files},{"DBMailStatus",null },{"IdentityStatus",Tabs.IdentityColumns }, {"IsAgentRunningStatus",null },{"DatabaseStateStatus",Tabs.DBOptions }};
 
         private void ResetStatusCols()
         {
@@ -192,12 +190,12 @@ namespace DBADashGUI
         }
 
         private readonly List<DataGridViewColumn> TestCols = new()
-        {           new DataGridViewLinkColumn(){ Name="Test", HeaderText="Test", DataPropertyName="DisplayText", SortMode = DataGridViewColumnSortMode.Automatic, Width=200},
-                    new DataGridViewLinkColumn(){ Name="OK", HeaderText="Instance Count OK", DataPropertyName="OK", SortMode = DataGridViewColumnSortMode.Automatic },
-                    new DataGridViewLinkColumn(){ Name = "Warning",  HeaderText="Instance Count Warning", DataPropertyName="Warning", SortMode = DataGridViewColumnSortMode.Automatic },
-                    new DataGridViewLinkColumn(){ Name = "Critical",  HeaderText="Instance Count Critical", DataPropertyName="Critical", SortMode = DataGridViewColumnSortMode.Automatic },
-                    new DataGridViewLinkColumn(){ Name = "NA",  HeaderText="Instance Count N/A", DataPropertyName="NA",SortMode = DataGridViewColumnSortMode.Automatic },
-                    new DataGridViewLinkColumn(){ Name = "Acknowledged",  HeaderText="Instance Count Acknowledged", DataPropertyName="Acknowledged", SortMode = DataGridViewColumnSortMode.Automatic }
+        {           new DataGridViewLinkColumn(){ Name="Test", HeaderText="Test", DataPropertyName="DisplayText", SortMode = DataGridViewColumnSortMode.Automatic, Width=200, ToolTipText = "Name of test"},
+                    new DataGridViewLinkColumn(){ Name="OK", HeaderText="Instance Count OK", DataPropertyName="OK", SortMode = DataGridViewColumnSortMode.Automatic, ToolTipText="Count of instances where status of check is OK." },
+                    new DataGridViewLinkColumn(){ Name = "Warning",  HeaderText="Instance Count Warning", DataPropertyName="Warning", SortMode = DataGridViewColumnSortMode.Automatic, ToolTipText = "Count of instances where status of check is Warning" },
+                    new DataGridViewLinkColumn(){ Name = "Critical",  HeaderText="Instance Count Critical", DataPropertyName="Critical", SortMode = DataGridViewColumnSortMode.Automatic,ToolTipText = "Count of instances where status of check is Critical"  },
+                    new DataGridViewLinkColumn(){ Name = "NA",  HeaderText="Instance Count N/A", DataPropertyName="NA",SortMode = DataGridViewColumnSortMode.Automatic,ToolTipText = "Count of instances where status of check is Not Applicable.  The check might not apply due to configured thresholds or based on what features are in use."  },
+                    new DataGridViewLinkColumn(){ Name = "Acknowledged",  HeaderText="Instance Count Acknowledged", DataPropertyName="Acknowledged", SortMode = DataGridViewColumnSortMode.Automatic, ToolTipText = "Count of instance where the status of check is Acknowledged." }
         };
 
         private static DataTable GroupedByTestSchema()
@@ -580,7 +578,7 @@ namespace DBADashGUI
         {
             if (e.RowIndex < 0) return;
             var col = dgvSummary.Columns[e.ColumnIndex].Name;
-            var tab = tabMapping.ContainsKey(col) ? tabMapping[dgvSummary.Columns[e.ColumnIndex].Name] : string.Empty;
+            var tab = tabMapping.ContainsKey(col) ? tabMapping[dgvSummary.Columns[e.ColumnIndex].Name] : null;
             var row = (DataRowView)dgvSummary.Rows[e.RowIndex].DataBoundItem;
             if (e.ColumnIndex == UptimeStatus.Index)
             {
@@ -590,7 +588,7 @@ namespace DBADashGUI
             {
                 ShowCorruptionViewer((string)row["InstanceGroupName"], (int)row["InstanceID"]);
             }
-            else if (tab != string.Empty)
+            else if (tab != null)
             {
                 Instance_Selected?.Invoke(this,
                     row["InstanceID"] != DBNull.Value
@@ -617,14 +615,9 @@ namespace DBADashGUI
 
         private void ShowCorruptionViewer(DBADashContext ctx)
         {
-            if (CorruptionFrm == null)
-            {
-                CorruptionFrm = new();
-                CorruptionFrm.FormClosed += delegate { CorruptionFrm = null; };
-            }
-            CorruptionFrm.SetContext(ctx);
-            CorruptionFrm.Show();
-            CorruptionFrm.Focus();
+            CorruptionViewer corruptionFrm = new();
+            corruptionFrm.SetContext(ctx);
+            corruptionFrm.ShowSingleInstance();
         }
 
         private void FocusedViewToolStripMenuItem_Click(object sender, EventArgs e)
@@ -706,7 +699,7 @@ namespace DBADashGUI
                     ShowCorruptionViewer(context);
                     break;
 
-                case 0 when string.IsNullOrEmpty(tab):
+                case 0 when !tab.HasValue:
                     FilterByStatus(new List<DBADashStatusEnum>() { DBADashStatusEnum.Warning, DBADashStatusEnum.Critical }, test);
                     break;
 

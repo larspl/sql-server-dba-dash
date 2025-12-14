@@ -6,6 +6,7 @@ using Humanizer;
 using Microsoft.Data.SqlClient;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Data;
 using System.Drawing;
 using System.Linq;
@@ -186,10 +187,7 @@ namespace DBADashGUI.AgentJobs
 
         private int _minimumDuration = 60;
 
-        private static JobStatusAndHistory JobHistoryForm;
-        private static RunningQueriesViewer RunningViewer;
-
-        private void DgvRunningJobs_CellContentClick(object sender, DataGridViewCellEventArgs e)
+        private async void DgvRunningJobs_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex < 0) return;
             var row = (DataRowView)dgvRunningJobs.Rows[e.RowIndex].DataBoundItem;
@@ -198,8 +196,7 @@ namespace DBADashGUI.AgentJobs
             var jobName = (string)row["job_name"];
             if (e.ColumnIndex == dgvRunningJobs.Columns["colJobName"]!.Index)
             {
-                JobHistoryForm?.Close();
-                JobHistoryForm = new();
+                JobStatusAndHistory jobHistoryForm = new();
                 var jobContext = new DBADashContext()
                 {
                     InstanceID = instanceId,
@@ -207,21 +204,18 @@ namespace DBADashGUI.AgentJobs
                     RegularInstanceIDsWithHidden = new HashSet<int>() { instanceId },
                     JobStepID = -1
                 };
-                JobHistoryForm.ShowSteps = true;
-                JobHistoryForm.FormClosed += delegate { JobHistoryForm = null; };
-                JobHistoryForm.Show();
-                JobHistoryForm.SetContext(jobContext);
+                jobHistoryForm.ShowSteps = true;
+                jobHistoryForm.Load += (_, _) => jobHistoryForm.SetContext(jobContext);
+                await jobHistoryForm.ShowSingleInstanceAsync();
             }
             else if (e.ColumnIndex == dgvRunningJobs.Columns["colRunningTime"]!.Index)
             {
                 var from = ((DateTime)row["start_execution_date"]).ToUniversalTime();
                 var to = DateTime.UtcNow;
-                RunningViewer?.Close();
-                RunningViewer = new()
+                RunningQueriesViewer runningViewer = new()
                 { SnapshotDateFrom = from, SnapshotDateTo = to, InstanceID = instanceId, JobId = jobId };
 
-                RunningViewer.FormClosed += delegate { RunningViewer = null; };
-                RunningViewer.Show();
+                await runningViewer.ShowSingleInstanceAsync();
             }
         }
 
@@ -241,6 +235,7 @@ namespace DBADashGUI.AgentJobs
             await CollectionMessaging.TriggerCollection(triggerContext.ConnectionID, types, triggerContext.CollectAgentID.Value, triggerContext.ImportAgentID.Value, this);
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Visible)]
         public int MinimumDuration
         {
             get => _minimumDuration;

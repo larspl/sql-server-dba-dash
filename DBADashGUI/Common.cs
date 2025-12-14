@@ -1,6 +1,7 @@
 ﻿using ClosedXML.Excel;
 using DBADash;
 using DBADashGUI.CustomReports;
+using DBADashGUI.Performance;
 using Microsoft.Data.SqlClient;
 using System;
 using System.Data;
@@ -848,6 +849,22 @@ namespace DBADashGUI
                     grid2.Rows[row].Cells[col].SetColor(highlightBackColor, highlightForeColor);
                 }
             }
+        }
+
+        public static void ShowObjectExecutionSummary(DBADashContext context, Form parent)
+        {
+            Form objectExecutionForm;
+            objectExecutionForm = new Form()
+            {
+                Text = context.ObjectName,
+                Width = parent.Width / 2,
+                Height = parent.Height / 2
+            };
+            var oes = new ObjectExecutionSummary() { Dock = DockStyle.Fill, UseGlobalTime = false };
+            oes.SetContext(context);
+            objectExecutionForm.Controls.Add(oes);
+
+            objectExecutionForm.ShowSingleInstance();
         }
     }
 }

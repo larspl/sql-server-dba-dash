@@ -1,10 +1,11 @@
-﻿using System;
+﻿using DBADashGUI.SchemaCompare;
+using DBADashGUI.Theme;
+using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
-using DBADashGUI.SchemaCompare;
-using DBADashGUI.Theme;
 
 namespace DBADashGUI.CustomReports
 {
@@ -26,11 +27,16 @@ namespace DBADashGUI.CustomReports
             lblWarning.ForeColor = DashColors.Fail;
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public LinkColumnInfo LinkColumnInfo { get; set; }
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public List<string> ColumnList { get; set; }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public DBADashContext Context { get; set; }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string LinkColumn { get; set; }
 
         private void Opt_CheckedChanged(object sender, EventArgs e)
@@ -40,7 +46,7 @@ namespace DBADashGUI.CustomReports
 
         private void SetTab()
         {
-            tab1.SelectedTab = optNone.Checked ? tabNone : optURL.Checked ? tabURL : optText.Checked ? tabText : optDrillDown.Checked ? tabDrillDown : optQueryPlan.Checked ? tabQueryPlan : null;
+            tab1.SelectedTab = optNone.Checked ? tabNone : optURL.Checked ? tabURL : optText.Checked ? tabText : optDrillDown.Checked ? tabDrillDown : optQueryPlan.Checked ? tabQueryPlan : optNavigateTree.Checked ? tabNavigateTree : null;
             cboTargetColumn.Enabled = optURL.Checked || optText.Checked || optQueryPlan.Checked;
         }
 
@@ -51,12 +57,15 @@ namespace DBADashGUI.CustomReports
             customReports = CustomReports.GetCustomReports();
             cboReport.Items.Clear();
             cboReport.Items.AddRange(customReports.Select(r => r.ProcedureName).ToArray<object>());
-
             cboTargetColumn.Items.Clear();
             cboTargetColumn.Items.AddRange(ColumnList.ToArray<object>());
+            cboInstanceIDCol.Items.AddRange(ColumnList.ToArray<object>());
+            cboDatabaseNameCol.Items.AddRange(ColumnList.ToArray<object>());
+            cboTab.Items.AddRange(Enum.GetValues<Main.Tabs>().Cast<object>().OrderBy(t => t.ToString()).ToArray());
             cboReport.Text = Context.Report.ProcedureName;
             cboTargetColumn.Text = LinkColumn;
             txtLinkColumn.Text = LinkColumn;
+
             switch (LinkColumnInfo)
             {
                 case null:
@@ -84,6 +93,14 @@ namespace DBADashGUI.CustomReports
                 case QueryPlanLinkColumnInfo queryPlan:
                     optQueryPlan.Checked = true;
                     cboTargetColumn.Text = queryPlan.TargetColumn;
+                    SetTab();
+                    break;
+
+                case NavigateTreeLinkColumnInfo navigateTree:
+                    optNavigateTree.Checked = true;
+                    cboDatabaseNameCol.Text = navigateTree.DatabaseColumn;
+                    cboInstanceIDCol.Text = navigateTree.InstanceColumn;
+                    cboTab.Text = navigateTree.Tab.ToString();
                     SetTab();
                     break;
             }
@@ -121,6 +138,15 @@ namespace DBADashGUI.CustomReports
                 LinkColumnInfo = new QueryPlanLinkColumnInfo()
                 {
                     TargetColumn = cboTargetColumn.Text
+                };
+            }
+            else if (optNavigateTree.Checked)
+            {
+                LinkColumnInfo = new NavigateTreeLinkColumnInfo()
+                {
+                    DatabaseColumn = cboDatabaseNameCol.Text,
+                    InstanceColumn = cboInstanceIDCol.Text,
+                    Tab = Enum.Parse<Main.Tabs>(cboTab.Text, true)
                 };
             }
             else

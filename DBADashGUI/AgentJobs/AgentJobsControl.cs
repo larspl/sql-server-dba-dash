@@ -1,4 +1,5 @@
 ﻿using DBADash;
+using DBADashGUI.CustomReports;
 using DBADashGUI.Interface;
 using DBADashGUI.Messaging;
 using DBADashGUI.Performance;
@@ -6,12 +7,12 @@ using DBADashGUI.Theme;
 using Microsoft.Data.SqlClient;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Data;
 using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using DBADashGUI.CustomReports;
 using SortOrder = System.Windows.Forms.SortOrder;
 
 namespace DBADashGUI.AgentJobs
@@ -25,18 +26,24 @@ namespace DBADashGUI.AgentJobs
         private int StepID = -1;
         private DBADashContext context;
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool IncludeCritical { get => statusFilterToolStrip1.Critical; set => statusFilterToolStrip1.Critical = value; }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool IncludeWarning { get => statusFilterToolStrip1.Warning; set => statusFilterToolStrip1.Warning = value; }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool IncludeNA { get => statusFilterToolStrip1.NA; set => statusFilterToolStrip1.NA = value; }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool IncludeOK { get => statusFilterToolStrip1.OK; set => statusFilterToolStrip1.OK = value; }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool IncludeAcknowledged { get => statusFilterToolStrip1.Acknowledged; set => statusFilterToolStrip1.Acknowledged = value; }
 
         private bool DoAutoSize = true;
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool ShowSteps { get => showJobStepsToolStripMenuItem.Checked; set => showJobStepsToolStripMenuItem.Checked = value; }
 
         public void SetContext(DBADashContext _context)
@@ -316,8 +323,6 @@ namespace DBADashGUI.AgentJobs
             colHistory.Visible = true;
         }
 
-        private RunningQueriesViewer RunningViewer;
-
         private void DgvJobHistory_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex < 0) return;
@@ -338,11 +343,8 @@ namespace DBADashGUI.AgentJobs
                     Convert.ToDouble(dgvJobHistory.Rows[e.RowIndex].Cells[colRunDurationSec.Index].Value));
                 var jobId = (Guid)row["job_id"];
                 var id = (int)row["InstanceID"];
-                RunningViewer?.Close();
-                RunningViewer = new() { SnapshotDateFrom = from, SnapshotDateTo = to, InstanceID = id, JobId = jobId };
-
-                RunningViewer.FormClosed += delegate { RunningViewer = null; };
-                RunningViewer.Show();
+                RunningQueriesViewer runningQueriesViewer = new() { SnapshotDateFrom = from, SnapshotDateTo = to, InstanceID = id, JobId = jobId };
+                runningQueriesViewer.ShowSingleInstance();
             }
         }
 
@@ -528,7 +530,7 @@ namespace DBADashGUI.AgentJobs
                 jobContext.JobID = GetJobId(row);
                 jobContext.ObjectName = GetJobName(row);
                 var frm = new JobInfoForm() { DBADashContext = jobContext };
-                frm.Show();
+                frm.ShowSingleInstance();
             }
             catch (Exception ex)
             {

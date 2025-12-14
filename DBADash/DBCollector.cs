@@ -9,7 +9,6 @@ using Polly;
 using Polly.Retry;
 using Serilog;
 using System;
-using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics;
@@ -79,7 +78,8 @@ namespace DBADash
         TableSize,
         ServerServices,
         AvailableProcs,
-        InstanceMetadata
+        InstanceMetadata,
+        FailedLogins
     }
 
     public enum HostPlatform
@@ -118,6 +118,7 @@ namespace DBADash
         public bool IsExtendedEventsNotSupportedException;
         private readonly bool DisableRetry;
         public List<Exception> Exceptions = new();
+        public int FailedLoginsBackfillMinutes { get; set; } = CollectionConfig.DefaultFailedLoginsBackfillMinutes;
 
         public const int DefaultIdentityCollectionThreshold = 5;
 
@@ -193,7 +194,7 @@ namespace DBADash
 
         public bool IsXESupported => !IsExtendedEventsNotSupportedException && DBADashConnection.IsXESupported(productVersion);
 
-        public bool IsQueryStoreSupported => IsAzureDB || (!productVersion.StartsWith("8.") && !productVersion.StartsWith("9.") && !productVersion.StartsWith("10.") && !productVersion.StartsWith("11.") && !productVersion.StartsWith("12."));
+        public bool IsQueryStoreSupported => IsAzureDB || engineEdition == DatabaseEngineEdition.SqlManagedInstance || (!productVersion.StartsWith("8.") && !productVersion.StartsWith("9.") && !productVersion.StartsWith("10.") && !productVersion.StartsWith("11.") && !productVersion.StartsWith("12."));
 
         private DBCollector(DBADashSource source, string serviceName, bool disableRetry, bool logInternalPerformanceCounters)
         {
@@ -286,8 +287,6 @@ namespace DBADash
             LogInternalPerformanceCounter("DBADash", "Collection Duration (ms)", currentCollection, Convert.ToDecimal(swatch.Elapsed.TotalMilliseconds));
         }
 
- 
-
         private async Task StartupAsync()
         {
             noWMI = Source.NoWMI;
@@ -323,14 +322,20 @@ namespace DBADash
                         {
                             Log.Warning(ex, "Error collecting {collection}", collection);
                         }
+
                         errors.Add(ex);
                         throw;
                     }
                 });
                 if (errors.Count > 0)
                 {
-                    LogError(new AggregateException($"{collection} succeeded after {errors.Count} attempts", errors), collection, "Collect[Retry]");
+                    LogError(new AggregateException($"{collection} succeeded after {errors.Count} attempts", errors),
+                        collection, "Collect[Retry]");
                 }
+            }
+            catch (DatabaseConnectionException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -620,7 +625,8 @@ namespace DBADash
             {
                 return false; // Required & collected by default
             }
-            else if (collectionType == CollectionType.TableSize && SQLVersion.Major <= 12 && !IsAzureDB)
+            else if (collectionType == CollectionType.TableSize && SQLVersion.Major <= 12 && !IsAzureDB
+                && engineEdition != DatabaseEngineEdition.SqlManagedInstance)
             {
                 return false; // Table size collection not supported on SQL 2014 and below
             }
@@ -862,14 +868,29 @@ OPTION(RECOMPILE)"); // Plan caching is not beneficial.  RECOMPILE hint to avoid
         }
 
         ///<summary>
-        ///Get a distinct list of sql_handle for running queries.  The handles are later used to capture query text
+        ///Get a distinct list of sql_handle from RunningQueries and RunningQueriesCursors tables (if they exist).  The handles are later used to capture query text
         ///</summary>
         private List<string> RunningQueriesHandles()
         {
-            var handles = (from r in Data.Tables["RunningQueries"]!.AsEnumerable()
-                           where r["sql_handle"] != DBNull.Value
-                           select ((byte[])r["sql_handle"]).ToHexString()).Distinct().ToList();
-            return handles;
+            var handles = new List<string>();
+
+            if (Data.Tables.Contains("RunningQueries"))
+            {
+                var runningQueriesHandles = from r in Data.Tables["RunningQueries"]!.AsEnumerable()
+                                            where r["sql_handle"] != DBNull.Value
+                                            select ((byte[])r["sql_handle"]).ToHexString();
+                handles.AddRange(runningQueriesHandles);
+            }
+
+            if (Data.Tables.Contains("RunningQueriesCursors"))
+            {
+                var cursorsHandles = from r in Data.Tables["RunningQueriesCursors"]!.AsEnumerable()
+                                     where r["sql_handle"] != DBNull.Value
+                                     select ((byte[])r["sql_handle"]).ToHexString();
+                handles.AddRange(cursorsHandles);
+            }
+
+            return handles.Distinct().ToList();
         }
 
         private async Task ExecuteCollectionAsync(CollectionType collectionType)
@@ -901,10 +922,14 @@ OPTION(RECOMPILE)"); // Plan caching is not beneficial.  RECOMPILE hint to avoid
             else if (collectionType == CollectionType.TableSize)
             {
                 param = new[] { new SqlParameter("SizeThresholdMB", Source.TableSizeCollectionThresholdMB ?? TableSizeCollectionThresholdMBDefault),
-                    new SqlParameter("TableSizeDatabases", Source.TableSizeDatabases ?? TableSizeDatabasesDefault),
+                    new SqlParameter("TableSizeDatabases", SqlDbType.NVarChar,-1) { Value =  Source.TableSizeDatabases ?? TableSizeDatabasesDefault},
                     new SqlParameter("MaxTables", Source.TableSizeMaxTableThreshold ?? TableSizeMaxTableThresholdDefault ),
                     new SqlParameter("MaxDatabases", Source.TableSizeMaxDatabaseThreshold ?? TableSizeMaxDatabaseThreshold)
                 };
+            }
+            else if (collectionType == CollectionType.FailedLogins)
+            {
+                param = new[] { new SqlParameter("FailedLoginsBackfillMinutes", FailedLoginsBackfillMinutes) };
             }
 
             if (collectionType == CollectionType.Drives)
@@ -1095,6 +1120,8 @@ OPTION(RECOMPILE)"); // Plan caching is not beneficial.  RECOMPILE hint to avoid
             cmd.Parameters.AddWithValue("CollectSessionWaits", Source.CollectSessionWaits);
             cmd.Parameters.AddWithValue("CollectTranBeginTime", Source.CollectTranBeginTime);
             cmd.Parameters.AddWithValue("CollectTempDB", Source.CollectTempDB);
+            cmd.Parameters.AddWithValue("CollectTaskWaits", Source.CollectTaskWaits);
+            cmd.Parameters.AddWithValue("CollectCursors", Source.CollectCursors);
             await cn.OpenAsync();
             var ds = new DataSet();
             da.Fill(ds);
@@ -1102,12 +1129,20 @@ OPTION(RECOMPILE)"); // Plan caching is not beneficial.  RECOMPILE hint to avoid
             dtRunningQueries.TableName = "RunningQueries";
             ds.Tables.Remove(dtRunningQueries);
             Data.Tables.Add(dtRunningQueries);
-            // We might have a second table if we are collecting session waits
-            if (ds.Tables.Count != 1) return;
-            var dtSessionWaits = ds.Tables[0];
-            dtSessionWaits.TableName = "SessionWaits";
-            ds.Tables.Remove(dtSessionWaits);
-            Data.Tables.Add(dtSessionWaits);
+            while (ds.Tables.Count > 0)
+            {
+                var dt = ds.Tables[0];
+                if (dt.Columns.Contains("waiting_tasks_count"))
+                {
+                    dt.TableName = "SessionWaits";
+                }
+                else if (dt.Columns.Contains("fetch_status"))
+                {
+                    dt.TableName = "RunningQueriesCursors";
+                }
+                ds.Tables.Remove(dt);
+                Data.Tables.Add(dt);
+            }
         }
 
         private void CollectResourceGovernor()

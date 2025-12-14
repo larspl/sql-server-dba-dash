@@ -1,26 +1,24 @@
 ﻿using DBADashGUI.CustomReports;
 using DBADashGUI.Pickers;
+using DBADashGUI.Theme;
+using LiveChartsCore.SkiaSharpView.SKCharts;
+using LiveChartsCore.SkiaSharpView.WinForms;
 using Microsoft.Data.SqlClient;
+using SkiaSharp;
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 using System.Xml;
-using DBADashGUI.Theme;
-using static DBADashGUI.DBADashStatus;
-using LiveChartsCore.SkiaSharpView.SKCharts;
-using SkiaSharp;
-using System.IO;
-using DocumentFormat.OpenXml.Drawing.Charts;
-using DocumentFormat.OpenXml.Office.PowerPoint.Y2021.M06.Main;
-using LiveChartsCore.SkiaSharpView.WinForms;
-using DataTable = System.Data.DataTable;
 using static DBADashGUI.DBADashAlerts.Rules.AlertRuleBase;
-using System.Collections.Frozen;
+using static DBADashGUI.DBADashStatus;
+using DataTable = System.Data.DataTable;
 
 namespace DBADashGUI
 {
@@ -152,10 +150,6 @@ namespace DBADashGUI
                     {
                         col.DisplayIndex = savedCol.Value.DisplayIndex;
                     }
-                }
-                else
-                {
-                    col.Visible = false;
                 }
             }
         }
@@ -372,6 +366,22 @@ namespace DBADashGUI
             }
 
             // If the key does not exist or the value is not a string, return the default value
+            return defaultValue;
+        }
+
+        public static bool GetValueAsBool(this Dictionary<string, object> dict, string key, bool defaultValue)
+        {
+            // Check if the key exists
+            if (dict.TryGetValue(key, out object value))
+            {
+                // Try to cast the value to a bool
+                if (value is bool boolValue)
+                {
+                    return boolValue;
+                }
+            }
+
+            // If the key does not exist or the value is not a bool, return the default value
             return defaultValue;
         }
 
@@ -642,8 +652,9 @@ namespace DBADashGUI
             foreach (DataColumn dataColumn in dt.Columns)
             {
                 DataGridViewColumn column;
+                customReportResult.Columns.TryGetValue(dataColumn.ColumnName, out var colInfo);
 
-                if (customReportResult.LinkColumns.ContainsKey(dataColumn.ColumnName))
+                if (colInfo?.Link != null)
                 {
                     column = new DataGridViewLinkColumn();
                 }
@@ -656,21 +667,14 @@ namespace DBADashGUI
                     column = new DataGridViewTextBoxColumn();
                 }
 
-                column.SortMode = DataGridViewColumnSortMode.Automatic;
-                column.DefaultCellStyle.Format =
-                    customReportResult.CellFormatString.TryGetValue(dataColumn.ColumnName, out var value)
-                        ? value
-                        : "";
-                column.DefaultCellStyle.NullValue = customReportResult.CellNullValue.TryGetValue(dataColumn.ColumnName, out var nullValue)
-                    ? nullValue
-                    : string.Empty;
+                column.DefaultCellStyle.Format = colInfo?.FormatString ?? string.Empty;
+                column.DefaultCellStyle.NullValue = colInfo?.NullValue ?? string.Empty;
                 column.DataPropertyName = dataColumn.ColumnName;
                 column.Name = dataColumn.ColumnName;
-                column.HeaderText =
-                    customReportResult.ColumnAlias.TryGetValue(column.DataPropertyName, out var alias)
-                        ? alias
-                        : dataColumn.Caption;
+                column.HeaderText = string.IsNullOrEmpty(colInfo?.Alias) ? dataColumn.Caption : colInfo.Alias;
                 column.ValueType = dataColumn.DataType;
+                column.ToolTipText = colInfo?.Description;
+                column.SortMode = DataGridViewColumnSortMode.Automatic;
                 dgv.Columns.Add(column);
             }
         }
@@ -908,5 +912,11 @@ namespace DBADashGUI
                 splitContainer.Panel2Collapsed = false;
             }
         }
+
+        public static string TabName(this Main.Tabs tab) => "tab" + tab;
+
+        public static bool IsQueryStoreObjectType(this SQLTreeItem.TreeType treeType) => treeType is SQLTreeItem.TreeType.StoredProcedure or SQLTreeItem.TreeType.CLRProcedure
+                or SQLTreeItem.TreeType.ScalarFunction or SQLTreeItem.TreeType.CLRScalarFunction
+                or SQLTreeItem.TreeType.Trigger or SQLTreeItem.TreeType.CLRTrigger;
     }
 }

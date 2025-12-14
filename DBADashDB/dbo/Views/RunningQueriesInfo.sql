@@ -91,10 +91,30 @@ SELECT Q.InstanceID,
     Q.is_implicit_transaction,
     D.is_query_store_on,
     CASE WHEN Q.tempdb_alloc_page_count < Q.tempdb_dealloc_page_count THEN 0 ELSE (Q.tempdb_alloc_page_count - Q.tempdb_dealloc_page_count) / 128.0 END AS tempdb_current_mb,
-    Q.tempdb_alloc_page_count /128.0 AS tempdb_allocations_mb 
+    Q.tempdb_alloc_page_count /128.0 AS tempdb_allocations_mb,
+    Q.total_elapsed_time,
+    CONCAT(Q.task_wait_type_1 + ' (' + CAST(Q.task_wait_time_1 AS NVARCHAR(260)) + 'ms)',
+            ', ' + Q.task_wait_type_2 + ' (' + CAST(Q.task_wait_time_2 AS NVARCHAR(260)) + 'ms)',
+            ', ' + Q.task_wait_type_3 + ' (' + CAST(Q.task_wait_time_3 AS NVARCHAR(260)) + 'ms)') AS TaskWaits,
+    Q.task_wait_type_1,
+    Q.task_wait_time_1,
+    Q.task_wait_type_2,
+    Q.task_wait_time_2,
+    Q.task_wait_type_3,
+    Q.task_wait_time_3,
+    Q.dop,
+    ISNULL(SUBSTRING(QTC.text,ISNULL((NULLIF(C.statement_start_offset,-1)/2)+1,0),ISNULL((NULLIF(NULLIF(C.statement_end_offset,-1),0) - NULLIF(C.statement_start_offset,-1))/2+1,2147483647)),C.properties) AS cursor_text
 FROM dbo.RunningQueries Q
 JOIN dbo.Instances I ON Q.InstanceID = I.InstanceID
-CROSS APPLY(SELECT ISNULL(CAST(Q.total_elapsed_time AS BIGINT),CASE WHEN Q.start_time_utc < Q.SnapshotDateUTC OR Q.start_time_utc IS NULL  THEN DATEDIFF_BIG(ms,ISNULL(Q.start_time_utc,Q.last_request_start_time_utc),Q.SnapshotDateUTC) ELSE 0 END) AS Duration,
+CROSS APPLY(SELECT 	/* 
+						If the total_elapsed_time and calculated duration are within 500ms or the calculated duration is negative and total_elapsed_time is less than 30 seconds, use total_elapsed_time.  
+						total_elapsed_time might offer better precision, but if it differs too much from the calculated duration, it might contain an error. #1491.  
+						For sleeping sessions, start_time will be NULL and the calculated duration will be based on last request start time
+					*/
+				   CASE WHEN (Q.start_time_utc > Q.SnapshotDateUTC AND Q.total_elapsed_time < 30000) 
+								OR ABS(DATEDIFF_BIG(ms,Q.start_time_utc,Q.SnapshotDateUTC)-CAST(Q.total_elapsed_time AS BIGINT)) < CAST(500 AS BIGINT) THEN CAST(Q.total_elapsed_time AS BIGINT) 
+						WHEN Q.start_time_utc < Q.SnapshotDateUTC OR Q.start_time_utc IS NULL  THEN DATEDIFF_BIG(ms,ISNULL(Q.start_time_utc,Q.last_request_start_time_utc),Q.SnapshotDateUTC) 
+						ELSE 0 END AS Duration,
                    CASE WHEN Q.transaction_begin_time_utc<Q.SnapshotDateUTC OR Q.transaction_begin_time_utc IS NULL THEN DATEDIFF_BIG(ms,Q.transaction_begin_time_utc,Q.SnapshotDateUTC) ELSE 0 END AS transaction_duration_ms) calc
 CROSS APPLY dbo.MillisecondsToHumanDuration (calc.Duration) HD
 CROSS APPLY dbo.SplitWaitResource(Q.wait_resource) waitR
@@ -134,3 +154,9 @@ CROSS APPLY dbo.MillisecondsToHumanDuration (RQBRS.BlockWaitTimeRecursiveMs) AS 
 CROSS APPLY dbo.MillisecondsToHumanDuration (DATEDIFF_BIG(ms,Q.last_request_end_time_utc,Q.SnapshotDateUTC)) AS TimeSinceLastRequestEnd
 CROSS APPLY dbo.MillisecondsToHumanDuration (DATEDIFF_BIG(ms,Q.last_request_start_time_utc,Q.last_request_end_time_utc)) AS LastRequestDuration
 CROSS APPLY dbo.MillisecondsToHumanDuration (calc.transaction_duration_ms) TranHD
+LEFT JOIN dbo.RunningQueriesCursors C ON C.InstanceID = Q.InstanceID 
+                                    AND C.SnapshotDateUTC = Q.SnapshotDateUTC 
+                                    AND C.session_id = Q.session_id 
+                                    AND C.uniqueifier=1 /* Get only the first cursor if multiple exist */
+                                    AND C.creation_time_utc <= Q.SnapshotDateUTC /* Ensure cursor was created before or at the same time as the snapshot.  If it was created after it might not be related to this request */
+LEFT JOIN dbo.QueryText QTC ON QTC.sql_handle = C.sql_handle 

@@ -18,6 +18,7 @@ namespace DBADashServiceConfig
     {
         private Dictionary<string, CustomCollection> _customCollections;
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Visible)]
         public Dictionary<string, CustomCollection> CustomCollections
         {
             get => _customCollections;
@@ -26,7 +27,9 @@ namespace DBADashServiceConfig
 
         private static KeyValuePair<string, CustomCollection> CustomCollectionClipboard;
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string ConnectionString { get; set; }
+
         private bool IsScheduleValid = true;
 
         private readonly List<DataGridViewColumn> CustomCols = new()
@@ -669,7 +672,6 @@ ORDER BY ProcName", cn);
         }
 
         private bool IsPreviewRunning;
-        private Form PreviewForm;
 
         private void LnkPreview_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
@@ -702,12 +704,7 @@ ORDER BY ProcName", cn);
 
         private void ShowPreview(DataTable dt)
         {
-            if (PreviewForm != null)
-            {
-                PreviewForm.Close();
-                PreviewForm = null;
-            }
-            PreviewForm = new Form
+            Form previewForm = new Form
             {
                 Text = "Preview",
                 Width = 600,
@@ -723,11 +720,10 @@ ORDER BY ProcName", cn);
                 AllowUserToDeleteRows = false,
                 ReadOnly = true,
             };
-            PreviewForm.Controls.Add(dgv);
+            previewForm.Controls.Add(dgv);
             dgv.AutoResizeColumns();
-            PreviewForm.ApplyTheme();
-            PreviewForm.Show();
-            PreviewForm.Closed += (sender, args) => PreviewForm = null;
+            previewForm.ApplyTheme();
+            previewForm.ShowSingleInstance();
         }
 
         private DataTable ExecuteProcedure(string procedureName, int timeOut)

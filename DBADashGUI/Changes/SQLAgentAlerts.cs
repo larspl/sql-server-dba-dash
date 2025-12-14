@@ -2,6 +2,7 @@
 using Microsoft.Data.SqlClient;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Data;
 using System.Linq;
 using System.Windows.Forms;
@@ -46,6 +47,7 @@ namespace DBADashGUI.Changes
                 new DataGridViewCheckBoxColumn(){ HeaderText="Is Critical Alert", DataPropertyName="Is Critical Alert", SortMode = DataGridViewColumnSortMode.Automatic},
         };
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool UseAlertName
         {
             get => pivotByAlertNameToolStripMenuItem.Checked; set => pivotByAlertNameToolStripMenuItem.Checked = value;
@@ -251,7 +253,7 @@ namespace DBADashGUI.Changes
 
         private void ClearALLToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            var dt = (DataTable)dgvAlerts.DataSource;
+            var dt = ((DataView)dgvAlerts.DataSource).Table;
             if (dt == null) return;
             var instanceIDs = dt.AsEnumerable()
                 .Where(row => row.Field<int>("AlertStatus") == 5)

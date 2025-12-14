@@ -1,12 +1,13 @@
-﻿using DBADashGUI.Theme;
+﻿using DBADash;
+using DBADashGUI.Theme;
 using Microsoft.Data.SqlClient;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Data;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
-using DBADash;
 
 namespace DBADashGUI.Performance
 {
@@ -29,8 +30,11 @@ namespace DBADashGUI.Performance
         private string Instance => CurrentContext.InstanceName;
         private int InstanceID => CurrentContext.InstanceID;
         private int DatabaseID => CurrentContext.DatabaseID;
-        private long ObjectID => (CurrentContext.Type is SQLTreeItem.TreeType.Database or SQLTreeItem.TreeType.AzureDatabase) ? -1 : CurrentContext.ObjectID;
+        private long ObjectID => CurrentContext.Type.IsQueryStoreObjectType() ? CurrentContext.ObjectID : -1;
 
+        private string ObjectName => CurrentContext.Type.IsQueryStoreObjectType() ? CurrentContext.ObjectName : string.Empty;
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool UseGlobalTime { get => !tsDateRange.Visible; set => tsDateRange.Visible = !value; }
 
         private DateTime FromUTC => UseGlobalTime
@@ -47,6 +51,7 @@ namespace DBADashGUI.Performance
 
         private DBADashContext CurrentContext;
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string Types
         {
             get => tsType.DropDownItems.Cast<ToolStripMenuItem>().Where(mnu => mnu.Checked).Aggregate("", (current, mnu) => current + ((current.Length > 0 ? "," : "") + mnu.Tag));
@@ -122,6 +127,7 @@ namespace DBADashGUI.Performance
                                                                         new DataGridViewTextBoxColumn()  { Name = "Total Writes", Visible=false,DataPropertyName = "total_writes", DefaultCellStyle = new DataGridViewCellStyle() { Format = "#,##0" } },
                                                                         new DataGridViewTextBoxColumn()  { Name = "Avg Writes",Visible=false, DataPropertyName = "avg_writes", DefaultCellStyle = new DataGridViewCellStyle() { Format = "#,##0" } },
                                                                         new DataGridViewTextBoxColumn()  { Name = "Period Time (sec)",Visible=false, DataPropertyName = "period_time_sec", DefaultCellStyle = new DataGridViewCellStyle() { Format = "#,##0.###" } },
+                                                                        new DataGridViewLinkColumn() { Name = "Query Store", Text = "Query Store", UseColumnTextForLinkValue = true }
         };
 
         private void TsColumn_Click(object sender, EventArgs e)
@@ -210,6 +216,7 @@ namespace DBADashGUI.Performance
                 tsCompare.Font = new Font(tsCompare.Font, HasCompare ? FontStyle.Bold : FontStyle.Regular);
                 dgv.DataSource = new DataView(dt, filter, "total_duration_sec DESC", DataViewRowState.CurrentRows);
                 dgv.Columns.AddRange(Columns.ToArray());
+                dgv.Columns["Query Store"].Visible = CurrentContext.CanMessage && CurrentContext.InstanceSupportsQueryStore;
                 dgv.ReplaceSpaceWithNewLineInHeaderTextToImproveColumnAutoSizing();
                 dgv.AutoResizeColumns(DataGridViewAutoSizeColumnsMode.DisplayedCells);
                 dgv.ApplyTheme();
@@ -253,6 +260,7 @@ namespace DBADashGUI.Performance
             }
 
             cmd.Parameters.AddIfGreaterThanZero("ObjectID", ObjectID);
+            cmd.Parameters.AddStringIfNotNullOrEmpty("ObjectName", ObjectName);
             cmd.Parameters.AddIfGreaterThanZero("DatabaseID", DatabaseID);
 
             if (HasCompare)
@@ -416,10 +424,21 @@ namespace DBADashGUI.Performance
         private void Dgv_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex < 0) return;
+            var row = (DataRowView)dgv.Rows[e.RowIndex].DataBoundItem;
             if (dgv.Columns[e.ColumnIndex].Name == "Name")
             {
-                var row = (DataRowView)dgv.Rows[e.RowIndex].DataBoundItem;
                 RefreshChart((long)row["ObjectID"], (string)row["ObjectName"]);
+            }
+            else if (dgv.Columns[e.ColumnIndex].Name == "Query Store")
+            {
+                var qs = new QueryStoreViewer();
+                var context = CurrentContext.DeepCopy();
+                context.ObjectName = (string)row["ObjectName"];
+                context.ObjectID = (long)row["ObjectID"];
+                context.DatabaseName = (string)row["DB"];
+                context.Type = SQLTreeItem.TreeType.StoredProcedure;
+                qs.Context = context;
+                qs.ShowSingleInstance();
             }
         }
 

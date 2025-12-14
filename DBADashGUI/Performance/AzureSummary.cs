@@ -213,33 +213,36 @@ namespace DBADashGUI.Performance
             {
                 var row = (DataRowView)dgv.Rows[e.RowIndex].DataBoundItem;
                 var instance = (string)row["Instance"];
+                var instanceId = (int)row["InstanceID"];
                 var db = (string)row["DB"];
+                var context = CommonData.GetDBADashContext(instanceId);
+                context.DatabaseName = db;
 
+                string text = instance + " | " + db;
+
+                if (col == colElasticPool)
+                {
+                    var pool = (string)row["elastic_pool_name"];
+                    context.ElasticPoolName = pool;
+                    context.Type = SQLTreeItem.TreeType.ElasticPool;
+                    text = instance + " | " + pool;
+                }
                 var frm = new AzureDBResourceStatsView
                 {
                     FromDate = DateRange.FromUTC,
                     ToDate = DateRange.ToUTC,
-                    InstanceID = (int)row["InstanceID"]
+                    CurrentContext = context,
+                    Text = text
                 };
-                if (col == colElasticPool)
-                {
-                    var pool = (string)row["elastic_pool_name"];
-                    frm.ElasticPoolName = pool;
-                    frm.Text = instance + " | " + pool;
-                }
-                else
-                {
-                    frm.Text = instance + " | " + db;
-                }
                 frm.ApplyTheme();
-                frm.Show();
+                frm.ShowSingleInstance();
             }
             else if (e.RowIndex >= 0 && col == colServiceObjective)
             {
                 var row = (DataRowView)dgv.Rows[e.RowIndex].DataBoundItem;
                 var frm = new ResourceGovernanceViewer() { InstanceID = (int)row["InstanceID"], DatabaseName = (string)row["DB"] };
                 frm.ApplyTheme();
-                frm.Show();
+                frm.ShowSingleInstance();
             }
         }
 
@@ -248,18 +251,20 @@ namespace DBADashGUI.Performance
             if (e.RowIndex >= 0 && dgvPool.Columns[e.ColumnIndex] == colPoolName)
             {
                 var row = (DataRowView)dgvPool.Rows[e.RowIndex].DataBoundItem;
-                var instance = (string)row["Instance"];
+                var instanceId = (int)row["InstanceID"];
                 var pool = (string)row["elastic_pool_name"];
+                var poolContext = CommonData.GetDBADashContext(instanceId);
+                poolContext.ElasticPoolName = pool;
+                poolContext.Type = SQLTreeItem.TreeType.ElasticPool;
                 var frm = new AzureDBResourceStatsView
                 {
                     FromDate = DateRange.FromUTC,
                     ToDate = DateRange.ToUTC,
-                    InstanceID = (int)row["InstanceID"],
-                    ElasticPoolName = pool,
-                    Text = instance + " | " + pool
+                    CurrentContext = poolContext,
+                    Text = poolContext.InstanceName + " | " + pool
                 };
                 frm.ApplyTheme();
-                frm.Show();
+                frm.ShowSingleInstance();
             }
         }
 

@@ -2,7 +2,9 @@
 using Microsoft.Data.SqlClient;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Data;
+using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 
@@ -20,6 +22,7 @@ namespace DBADashGUI.Tagging
 
         private List<DBADashTag> _allTags;
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public List<DBADashTag> AllTags
         {
             get => _allTags;
@@ -43,10 +46,15 @@ namespace DBADashGUI.Tagging
         public void SetContext(DBADashContext _context)
         {
             this.context = _context;
-            if (_context.InstanceIDs.Count == 1)
+            if (_context.InstanceIDs.Count == 1 && _context.Type != SQLTreeItem.TreeType.AzureInstance)
             {
                 InstanceID = _context.InstanceIDs.First();
             }
+            else
+            {
+                InstanceID = 0;
+            }
+            colInherited.Visible = _context.Type == SQLTreeItem.TreeType.AzureDatabase || _context.ParentType == SQLTreeItem.TreeType.AzureDatabase;
             InstanceName = _context.InstanceName;
             RefreshData();
         }
@@ -99,12 +107,15 @@ namespace DBADashGUI.Tagging
             dgv.Rows.Clear();
             dgvTags.Rows.Clear();
             var tags = InstanceTag.GetInstanceTags(InstanceName, InstanceID);
+            var italic = new Font(dgv.Font, FontStyle.Italic);
 
             foreach (var t in tags)
             {
                 if (!t.TagName.StartsWith('{'))
                 {
-                    dgvTags.Rows.Add(t.TagID, t.IsTagged, t.TagName, t.TagValue);
+                    int rowIndex = dgvTags.Rows.Add(t.TagID, t.IsTagged, t.TagName, t.TagValue, t.IsInherited);
+                    dgvTags.Rows[rowIndex].ReadOnly = t.IsInherited;
+                    dgvTags.Rows[rowIndex].DefaultCellStyle.Font = t.IsInherited ? italic : dgv.Font;
                 }
                 else if (t.IsTagged)
                 {
@@ -203,6 +214,13 @@ namespace DBADashGUI.Tagging
         {
             if (e.ColumnIndex == colCheck.Index && e.RowIndex >= 0)
             {
+                var isInherited = (bool)dgvTags.Rows[e.RowIndex].Cells[colInherited.Index].Value;
+                if (isInherited)
+                {
+                    MessageBox.Show("Cannot change inherited tag.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                    RefreshEdit();
+                    return;
+                }
                 var tagId = (int)dgvTags.Rows[e.RowIndex].Cells[colTagID.Index].Value;
                 var tagName = (string)dgvTags.Rows[e.RowIndex].Cells[colTagName1.Index].Value;
                 var tagValue = (string)dgvTags.Rows[e.RowIndex].Cells[ColTagValue1.Index].Value;

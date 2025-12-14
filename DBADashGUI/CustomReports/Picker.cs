@@ -16,9 +16,26 @@ namespace DBADashGUI.CustomReports
 
         public object DefaultValue { get; set; }
 
+        private bool _IsText;
+
+        public bool MenuBar { get; set; }
+
+        public bool IsText
+        {
+            get => _IsText;
+            set
+            {
+                _IsText = value;
+                if (IsText)
+                {
+                    PickerItems = null;
+                }
+            }
+        }
+
         public Type DataType { get; set; } = typeof(string);
 
-        public static Picker CreateTopPicker()
+        public static Picker CreateTopPicker(bool menuBar=false)
         {
             return new Picker()
             {
@@ -37,7 +54,25 @@ namespace DBADashGUI.CustomReports
                         {"2000", "2000"},
                         {"5000", "5000"},
                         {"10000", "10000"}
-                    }
+                    },
+                MenuBar = menuBar
+            };
+        }
+
+        public static Picker CreateBooleanPicker(string paramName, string name, bool defaultValue = true, string trueString = "Yes", string falseString = "No", bool menuBar=false)
+        {
+            return new Picker()
+            {
+                ParameterName = paramName,
+                Name = name,
+                DefaultValue = defaultValue,
+                DataType = typeof(bool),
+                PickerItems = new Dictionary<object, string>()
+                    {
+                        {true, trueString},
+                        {false, falseString}
+                    },
+                MenuBar = menuBar
             };
         }
     }

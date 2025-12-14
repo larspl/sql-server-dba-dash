@@ -18,8 +18,10 @@ VALUES -- Daily Partitions
 	('dbo','PerformanceCounters','d',14,CAST(1 AS BIT)),
 	('dbo','JobHistory','d',14,CAST(1 AS BIT)),
 	('dbo','RunningQueries','d',14,CAST(1 AS BIT)),
+	('dbo','RunningQueriesCursors','d',14,CAST(1 AS BIT)),
 	('dbo','MemoryUsage','d',14,CAST(1 AS BIT)),
 	('dbo','SessionWaits','d',14,CAST(1 AS BIT)),
+	('dbo','FailedLogins','d',14,CAST(1 AS BIT)),
 	-- Monthly Partitions
 	('dbo','AzureDBElasticPoolResourceStats_60MIN','m',3,CAST(1 AS BIT)),
 	('dbo','AzureDBResourceStats_60MIN','m',3,CAST(1 AS BIT)),

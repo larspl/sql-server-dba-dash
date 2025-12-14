@@ -1188,7 +1188,9 @@ FROM (VALUES('dbo','ObjectExecutionStats',120),
 				('dbo','IdentityColumnsHistory',730),
 				('dbo','TableSize',730),
 				('Alert','ClosedAlerts',180),
-				('dbo','OfflineInstances',730)
+				('dbo','OfflineInstances',730),
+				('dbo','FailedLogins',90 ),
+				('dbo','RunningQueriesCursors',30)
 				) AS t(SchemaName,TableName,RetentionDays)
 WHERE NOT EXISTS(SELECT 1 
 				FROM dbo.DataRetention DR
@@ -1320,14 +1322,10 @@ BEGIN
 	VALUES
 	( -1, 0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855, 0x )
 	SET IDENTITY_INSERT dbo.DDL OFF
-END
-IF NOT EXISTS(SELECT 1 FROM dbo.ObjectType)
-BEGIN
-	INSERT INTO dbo.ObjectType
-	(
-		ObjectType,
-		TypeDescription
-	)
+END;
+
+MERGE INTO dbo.ObjectType AS T
+USING(
 	VALUES( 'P','Stored Procedure'),
 	('V','View'),
 	('IF','Inline Function'),
@@ -1355,8 +1353,20 @@ BEGIN
 	('SBB','Service Broker Binding'),
 	('SBP','Service Broker Priorities'),
 	('SQ','Service Broker Queue'),
-	('SBR','Service Broker Route')
-END
+	('SBR','Service Broker Route'),
+	('TR','Trigger')
+	) AS S (ObjectType,TypeDescription)
+ON S.ObjectType = T.ObjectType
+WHEN MATCHED 
+AND EXISTS (SELECT T.TypeDescription
+			EXCEPT
+			SELECT S.TypeDescription
+			)
+THEN UPDATE
+SET T.TypeDescription = S.TypeDescription
+WHEN NOT MATCHED BY TARGET THEN
+INSERT(ObjectType,TypeDescription)
+VALUES(S.ObjectType,S.TypeDescription);
 
 INSERT INTO dbo.CollectionDatesThresholds
 (
@@ -1420,7 +1430,8 @@ FROM
 (-1,'IdentityColumns',10080,20160),
 (-1,'RunningJobs',5,10),
 (-1,'TableSize',4320,11520),
-(-1,'ServerServices',1445,2880)
+(-1,'ServerServices',1445,2880),
+(-1,'FailedLogins',1445,2880)
 ) T(InstanceID,Reference,WarningThreshold,CriticalThreshold)
 WHERE NOT EXISTS(SELECT 1 FROM dbo.CollectionDatesThresholds CDT WHERE CDT.InstanceID = T.InstanceID AND CDT.Reference = T.Reference)
 
@@ -1967,7 +1978,18 @@ FROM (VALUES('Running Queries','Running Query Count','',2),
 	('Running Queries','TempDB Wait Count','',2),
 	('Running Queries','TempDB Wait Time (ms)','',2),
 	('Running Queries','Sleeping Sessions Count','',2),
-	('Running Queries','Sleeping Sessions Max Idle Time (ms)','',2)
+	('Running Queries','Sleeping Sessions Max Idle Time (ms)','',2),
+	('sys.dm_db_resource_stats', 'avg_cpu_percent','',4),
+	('sys.dm_db_resource_stats', 'avg_data_io_percent','',4),
+	('sys.dm_db_resource_stats', 'avg_log_write_percent','',4),
+	('sys.dm_db_resource_stats', 'avg_memory_usage_percent','',4),
+	('sys.dm_db_resource_stats', 'xtp_storage_percent','',4),
+	('sys.dm_db_resource_stats', 'max_worker_percent','',4),
+	('sys.dm_db_resource_stats', 'max_session_percent','',4),
+	('sys.dm_db_resource_stats', 'dtu_limit','',4),
+	('sys.dm_db_resource_stats', 'avg_instance_cpu_percent','',4),
+	('sys.dm_db_resource_stats', 'avg_instance_memory_percent','',4),
+	('sys.dm_db_resource_stats', 'cpu_limit','',4)
 	) VirtualCounters(object_name,counter_name,instance_name,CounterType)
 WHERE NOT EXISTS(
 				SELECT 1 
@@ -1976,7 +1998,6 @@ WHERE NOT EXISTS(
 				AND C.object_name = VirtualCounters.object_name
 				AND C.instance_name = VirtualCounters.instance_name
 				)
-
 
 INSERT INTO dbo.RepositoryMetricsConfig(
 	InstanceID,
@@ -2016,7 +2037,11 @@ FROM (VALUES -- AG aggregate
 			-- Slow Queries
 			('Abort Count',1,0,'SlowQueries'),
 			('Error Count',1,0,'SlowQueries'),
-			('Total Queries',1,0,'SlowQueries')
+			('Total Queries',1,0,'SlowQueries'),
+			-- Databases
+			('Count of User Databases',1,0,'Databases'),
+			('Databases Created',1,0,'Databases'),
+			('Databases Dropped',1,0,'Databases')
 		) M(MetricName,IsAggregate,IsEnabled,MetricType)
 WHERE NOT EXISTS(
 				SELECT 1 
@@ -2066,3 +2091,10 @@ BEGIN
 					)
 	DROP TABLE dbo.LogRestoresTemp
 END
+EXEC dbo.AzureDBCounters_Upd
+/* 
+	Update extended property to indicate that a DB deployment is no longer in progress, allowing the GUI to continue loading.
+*/
+EXECUTE sp_updateextendedproperty
+		@name = N'IsDBUpgradeInProgress',
+		@value = 'N';

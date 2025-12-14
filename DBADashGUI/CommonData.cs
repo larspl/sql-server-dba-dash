@@ -12,22 +12,32 @@ using System.Linq;
 using System.Runtime.Caching;
 using System.Threading.Tasks;
 using System.Xml.Linq;
-using DocumentFormat.OpenXml.Bibliography;
 
 namespace DBADashGUI
 {
     internal static class CommonData
     {
         public static DataTable Instances;
-        public static HashSet<int>HasInstanceMetadata;
+        public static HashSet<int> HasInstanceMetadata;
 
         private static readonly MemoryCache cache = MemoryCache.Default;
+        internal static readonly string[] databaseNameParams = new string[] { "@DB", "@DBName", "@DatabaseName", "@Database", "@database_name", "db_name" };
 
         public static void UpdateInstancesList(string tagIDs = "", bool? Active = true, bool? azureDB = null, string searchString = "", string groupByTag = "")
         {
             Instances = GetInstances(tagIDs, Active, azureDB, searchString, groupByTag);
             DBADashContext.HiddenInstanceIDs = Instances.Rows.Cast<DataRow>().Where(r => !r.Field<bool>("ShowInSummary")).Select(r => r.Field<int>("InstanceID")).ToHashSet();
-            HasInstanceMetadata = Instances.Rows.Cast<DataRow>().Where(r=>r.Field<bool>("HasInstanceMetadata")).Select(r => r.Field<int>("InstanceID")).ToHashSet();
+            HasInstanceMetadata = Instances.Rows.Cast<DataRow>().Where(r => r.Field<bool>("HasInstanceMetadata")).Select(r => r.Field<int>("InstanceID")).ToHashSet();
+        }
+
+        public static DataTable GetElasticPools()
+        {
+            using var cn = new SqlConnection(Common.ConnectionString);
+            using var cmd = new SqlCommand(@"dbo.AzureDBElasticPool_Get", cn) { CommandType = CommandType.StoredProcedure };
+            using var da = new SqlDataAdapter(cmd);
+            DataTable dt = new();
+            da.Fill(dt);
+            return dt;
         }
 
         public static DataTable GetInstances(string tagIDs = "", bool? Active = true, bool? azureDB = null, string searchString = "", string groupByTag = "")
@@ -57,7 +67,7 @@ namespace DBADashGUI
             while (rdr.Read())
             {
                 results.Add(new DatabaseInfo(rdr.GetFieldValue<int>("InstanceID"), rdr.GetFieldValue<int>("DatabaseID"),
-                    rdr.GetFieldValue<string>("InstanceGroupName"), rdr.GetFieldValue<string>("DatabaseName")));
+                    rdr.GetFieldValue<string>("InstanceGroupName"), rdr.GetFieldValue<string>("Database")));
             }
             return results;
         }
@@ -333,6 +343,7 @@ namespace DBADashGUI
                 AzureInstanceIDsWithHidden = isAzureDB ? new HashSet<int>() { instanceID } : new HashSet<int>(),
                 InstanceID = instanceID,
                 InstanceName = (string)row["Instance"],
+                MasterInstanceID = row.Field<int?>("MasterInstanceID") ?? 0,
                 Type = isAzureDB ? SQLTreeItem.TreeType.AzureDatabase : SQLTreeItem.TreeType.Instance,
             };
             return context;
@@ -395,7 +406,7 @@ namespace DBADashGUI
                 report.QualifiedProcedureName = schemaName.SqlQuoteName() + "." + procName.SqlQuoteName();
                 report.Params = GetParameters(paramXML);
                 report.DatabaseNameParameter = ((report.Params?.ParamList?.Select(p => p.ParamName).Where(p =>
-                    (new string[] { "@DB", "@DBName", "@DatabaseName", "@Database", "@database_name", "db_name" }).Contains(p, StringComparer.OrdinalIgnoreCase))) ?? Array.Empty<string>()).MinBy(p => p);
+                    (databaseNameParams).Contains(p, StringComparer.OrdinalIgnoreCase))) ?? Array.Empty<string>()).MinBy(p => p);
                 reports.Add(report);
             }
             return reports;
@@ -424,7 +435,7 @@ namespace DBADashGUI
 
                 return parameters;
             }
-            catch (Exception ex)
+            catch
             {
                 return new Params();
             }

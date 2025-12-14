@@ -18,12 +18,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup .NET Core
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: 10.0.x
           dotnet-quality: 'ga'
       
       - name: Check SDK version
@@ -57,7 +57,7 @@ jobs:
         id: GetBuildReference
         shell: powershell
         run: | 
-              Invoke-WebRequest -Uri 'https://dataplat.github.io/assets/dbatools-buildref-index.json' -OutFile 'DBADashBuild\CLI\BuildReference.json'
+              Invoke-WebRequest -Uri 'https://dataplat.dbatools.io/assets/dbatools-buildref-index.json' -OutFile 'DBADashBuild\CLI\BuildReference.json'
 
       - name: Zip
         shell: powershell

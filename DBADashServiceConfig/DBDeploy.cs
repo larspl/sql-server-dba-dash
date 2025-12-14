@@ -1,10 +1,11 @@
 ﻿using DBADash;
+using DBADashGUI.Theme;
 using Microsoft.Data.SqlClient;
 using System;
+using System.ComponentModel;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using DBADashGUI.Theme;
 
 namespace DBADashServiceConfig
 {
@@ -20,12 +21,14 @@ namespace DBADashServiceConfig
 
         private string _connectionString;
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string DatabaseName
         {
             get => cboDatabase.Text;
             set => cboDatabase.Text = value;
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string ConnectionString
         {
             get
@@ -91,30 +94,32 @@ AND database_id > 4 ";
             }
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string DB
         {
             get => cboDatabase.Text;
             set => cboDatabase.Text = value;
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string DeployScript
         {
             get => txtDeployScript.Text;
             set => txtDeployScript.Text = value;
         }
 
-        private void DBDeploy_Load(object sender, EventArgs e)
+        private async void DBDeploy_Load(object sender, EventArgs e)
         {
             try
             {
-                CollectionConfig.ValidateDestination(new DBADashConnection(ConnectionString));
+                await CollectionConfig.ValidateDestinationAsync(new DBADashConnection(ConnectionString));
             }
             catch (Exception ex)
             {
                 CommonShared.ShowExceptionDialog(ex);
                 DialogResult = DialogResult.Abort;
             }
-            DbChanged();
+            await DbChangedAsync();
         }
 
         private void BttnGenerate_Click(object sender, EventArgs e)
@@ -283,16 +288,16 @@ AND database_id > 4 ";
             bttnCopy.Enabled = txtDeployScript.Text.Length > 0;
         }
 
-        private void CboDatabase_SelectedIndexChanged(object sender, EventArgs e)
+        private async void CboDatabase_SelectedIndexChanged(object sender, EventArgs e)
         {
-            DbChanged();
+            await DbChangedAsync();
         }
 
-        private void DbChanged()
+        private async Task DbChangedAsync()
         {
             try
             {
-                dbVersionStatus = DBValidations.VersionStatus(ConnectionString);
+                dbVersionStatus = await DBValidations.VersionStatusAsync(ConnectionString);
                 bttnGenerate.Enabled = true;
                 bttnDeploy.Enabled = true;
                 if (dbVersionStatus.VersionStatus == DBValidations.DBVersionStatusEnum.CreateDB)
@@ -328,9 +333,9 @@ AND database_id > 4 ";
             }
         }
 
-        private void CboDatabase_Validated(object sender, EventArgs e)
+        private async void CboDatabase_Validated(object sender, EventArgs e)
         {
-            DbChanged();
+            await DbChangedAsync();
         }
 
         private void BttnDeploy_Click(object sender, EventArgs e)

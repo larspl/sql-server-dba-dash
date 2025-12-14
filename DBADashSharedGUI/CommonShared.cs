@@ -15,7 +15,6 @@ namespace DBADashSharedGUI
 {
     public class CommonShared
     {
-        private static CodeViewer FrmCodeViewer;
         public static readonly string TempFilePrefix = "DBADashGUITemp_";
 
         public static void OpenURL(string url)
@@ -228,19 +227,34 @@ namespace DBADashSharedGUI
 
         public static void ShowCodeViewer(string sql, string title = "", CodeEditor.CodeEditorModes Language = CodeEditor.CodeEditorModes.SQL)
         {
-            FrmCodeViewer?.Close();
-            FrmCodeViewer = new CodeViewer
+            if (Language != CodeEditor.CodeEditorModes.None && ShouldDisableSyntaxHighlighting(sql)) // Turn off syntax highlighting if it's likely to be problematic
+            {
+                Language = CodeEditor.CodeEditorModes.None;
+            }
+
+            CodeViewer frmCodeViewer = new()
             {
                 Language = Language,
                 Code = sql,
                 Text = "Code Viewer" + (string.IsNullOrEmpty(title) ? "" : " - " + title)
             };
-            if (FrmCodeViewer.WindowState == FormWindowState.Minimized)
+            if (frmCodeViewer.WindowState == FormWindowState.Minimized)
             {
-                FrmCodeViewer.WindowState = FormWindowState.Normal;
+                frmCodeViewer.WindowState = FormWindowState.Normal;
             }
-            FrmCodeViewer.FormClosed += (s, e) => FrmCodeViewer = null;
-            FrmCodeViewer.Show();
+            frmCodeViewer.ShowSingleInstance();
+        }
+
+        private static bool ShouldDisableSyntaxHighlighting(string txt)
+        {
+            if (string.IsNullOrEmpty(txt))
+                return false;
+
+            // Split on newline
+            var lines = txt.Split(new[] { '\r', '\n' }, StringSplitOptions.None);
+            // Disable syntax highlighting if any line of code is longer than 50K.
+            // Long single lines of code with additional factors like a large number of punctuation or whitespace can cause the app to hang. #1561
+            return lines.Any(line => line.Length > 50000);
         }
 
         public static string GetTempFilePath(string extension)
@@ -274,9 +288,9 @@ namespace DBADashSharedGUI
         /// <returns></returns>
         public static TaskDialogButton ShowExceptionDialog(Exception ex, string heading = null, string caption = "Error", TaskDialogIcon icon = null, string text = null, TaskDialogButtonCollection buttons = null)
         {
-            heading ??= ex.Message;
-            text ??= heading == ex.Message ? null : ex.Message;
-            return ShowExceptionDialog(heading, text, ex.ToString(), caption, icon, buttons);
+            heading ??= ex?.Message;
+            text ??= heading == ex?.Message ? null : ex?.Message;
+            return ShowExceptionDialog(heading, text, ex?.ToString(), caption, icon, buttons);
         }
 
         /// <summary>

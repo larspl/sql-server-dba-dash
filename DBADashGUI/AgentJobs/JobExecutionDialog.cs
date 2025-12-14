@@ -2,6 +2,7 @@
 using DBADashGUI.Messaging;
 using DBADashGUI.Theme;
 using System;
+using System.ComponentModel;
 using System.Data;
 using System.Drawing;
 using System.Threading;
@@ -25,9 +26,13 @@ namespace DBADashGUI.AgentJobs
 
         private static int ReceiveMessageTimeoutMs => (MessageLifetime * 1000) + 1000;
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Guid JobId { get; set; }
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public int InstanceId { get; set; }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string JobName { get => lnkJobName.Text; set => lnkJobName.Text = value; }
 
         private string StartStep
@@ -51,8 +56,6 @@ namespace DBADashGUI.AgentJobs
         private int LastRunDate;
 
         private DateTime JobStart;
-
-        private JobInfoForm _jobInfoForm;
 
         #endregion Fields
 
@@ -130,16 +133,12 @@ namespace DBADashGUI.AgentJobs
 
         private void JobLink_Clicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
-            if (_jobInfoForm == null)
+            JobInfoForm jobInfoForm = new JobInfoForm()
             {
-                _jobInfoForm = new JobInfoForm()
-                {
-                    DBADashContext = _currentContext
-                };
-                _jobInfoForm.FormClosed += (_, _) => { _jobInfoForm = null; };
-            }
-            _jobInfoForm.Show();
-            _jobInfoForm.Focus();
+                DBADashContext = _currentContext
+            };
+
+            jobInfoForm.ShowSingleInstance();
         }
 
         #endregion Event Handlers & Initialization

@@ -37,6 +37,7 @@ namespace DBADash
         public const int DefaultImportCommandTimeout = 60;
         public const int DefaultPurgeDataCommandTimeout = 1200;
         public const int DefaultAddPartitionsCommandTimeout = 300;
+        public const int DefaultFailedLoginsBackfillMinutes = 1440;
 
         public bool EnableMessaging { get; set; } = true;
 
@@ -55,6 +56,8 @@ namespace DBADash
         public int? AlertProcessingFrequencySeconds { get; set; }
 
         public int? AlertProcessingStartupDelaySeconds { get; set; }
+
+        public int? FailedLoginsBackfillMinutes { get; set; }
 
         public const int DefaultAlertProcessingFrequencySeconds = 60;
 
@@ -224,12 +227,12 @@ namespace DBADash
 
         public int? MessageThreads { get; set; }
 
-        public void ValidateDestination()
+        public async Task ValidateDestinationAsync()
         {
-            ValidateDestination(DestinationConnection);
+            await ValidateDestinationAsync(DestinationConnection);
         }
 
-        public static void ValidateDestination(DBADashConnection destination)
+        public static async Task ValidateDestinationAsync(DBADashConnection destination)
         {
             if (destination.Type == ConnectionType.Invalid)
             {
@@ -242,7 +245,7 @@ namespace DBADash
                     throw new Exception("Provide a name for the DBADash repository database through the Initial Catalog property of the connection string");
                 }
                 // VersionStatus check will throw an error if there is an issue connecting to the DB or the DB isn't valid.
-                var status = DBValidations.VersionStatus(destination.ConnectionString);
+                var status = await DBValidations.VersionStatusAsync(destination.ConnectionString);
                 if (status.VersionStatus == DBValidations.DBVersionStatusEnum.CreateDB)
                 {
                     ValidateDestinationVersion(destination);

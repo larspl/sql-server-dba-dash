@@ -4,12 +4,16 @@ using DBADashGUI.Theme;
 using Microsoft.Data.SqlClient;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Data;
 using System.Drawing;
 using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Windows.Forms;
 using Font = System.Drawing.Font;
 
@@ -24,8 +28,10 @@ namespace DBADashGUI.CustomReports
         public EventHandler<DataGridViewCellEventArgs> ColumnContextMenuOpening;
         public EventHandler GridFilterChanged;
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public int ResultSetID { get; set; }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string ResultSetName { get; set; }
 
         private ToolStripMenuItem GetCopyGridMenuItem() =>
@@ -39,6 +45,16 @@ namespace DBADashGUI.CustomReports
 
         private ToolStripMenuItem GetExportToExcelMenuItem() => new("Export Excel", Properties.Resources.excel16x16,
             (_, _) => ExportToExcel());
+
+        private ToolStripMenuItem GetCopyAsMarkdownMenuItem()
+        {
+            var menuItem = new ToolStripMenuItem("As Markdown", Properties.Resources.MarkdownFile);
+            menuItem.DropDownItems.AddRange(new ToolStripItem[] {
+                new ToolStripMenuItem("Standard", Properties.Resources.TextLeft, (_, _) => CopyAsMarkdown()),
+                new ToolStripMenuItem("Prettified", Properties.Resources.PrettyCode, (_, _) => CopyAsMarkdown(true))
+            });
+            return menuItem;
+        }
 
         private ToolStripMenuItem GetSaveTableMenuItem()
         {
@@ -159,7 +175,9 @@ namespace DBADashGUI.CustomReports
             {
                 GetCopyGridMenuItem(),
                 GetCopyColumnMenuItem(),
-                GetCopySelectedMenuItem()
+                GetCopySelectedMenuItem(),
+                GetCopyAsMarkdownMenuItem(),
+                GetCopyAsJsonMenuItem()
             });
             ColumnContextMenu.Items.AddRange(
                 new ToolStripItem[]
@@ -255,7 +273,9 @@ namespace DBADashGUI.CustomReports
                 GetCopyColumnMenuItem(),
                 copyCell,
                 copyRow,
-                GetCopySelectedMenuItem()
+                GetCopySelectedMenuItem(),
+                GetCopyAsMarkdownMenuItem(),
+                GetCopyAsJsonMenuItem()
             });
 
             CellContextMenu.Items.AddRange(
@@ -1189,16 +1209,15 @@ GO
             Dispose(false);
         }
 
-
         /// <summary>
         /// Show/Hide columns depending on if they have any data
         /// </summary>
         /// <param name="toggleMode">Set to true to toggle the visibility.  Set to false to only hide columns without impacting the visibility of columns already hidden</param>
-        public void HideEmptyColumns(bool toggleMode=true)
+        public void HideEmptyColumns(bool toggleMode = true)
         {
             if (Rows.Count == 0 || Columns.Count == 0)
             {
-                return; 
+                return;
             }
 
             foreach (DataGridViewColumn column in Columns)
@@ -1206,6 +1225,279 @@ GO
                 var hasData = Rows.Cast<DataGridViewRow>().Where(row => !row.IsNewRow && row.Cells[column.Index].Value != null).Any(row => !string.IsNullOrEmpty(row.Cells[column.Index].Value.ToString()?.Trim()));
                 column.Visible = (hasData && column.Visible) || (toggleMode && hasData);
             }
+        }
+
+        /// <summary>
+        /// Copy the DataGridView as a markdown table to the clipboard
+        /// </summary>
+        /// <param name="prettify">Option to pad text so it looks like a grid when viewing markdown</param>
+        public void CopyAsMarkdown(bool prettify = false)
+        {
+            if (Columns.Cast<DataGridViewColumn>().Count(c => c.Visible) == 0)
+            {
+                MessageBox.Show("No data to copy", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var markdownText = ConvertToMarkdown(prettify);
+            Clipboard.SetText(markdownText);
+        }
+
+        /// <summary>
+        /// Convert the DataGridView to a markdown table
+        /// </summary>
+        /// <param name="prettify">Option to pad text so it looks like a grid when viewing markdown</param>
+        /// <returns>Markdown text</returns>
+        public string ConvertToMarkdown(bool prettify = false)
+        {
+            var visibleColumns = Columns.Cast<DataGridViewColumn>().Where(c => c.Visible).ToList();
+            var sb = new StringBuilder();
+
+            // Calculate column widths if prettifying
+            int[] columnWidths = null;
+            if (prettify)
+            {
+                columnWidths = CalculateColumnWidths(visibleColumns);
+            }
+
+            // Add header row
+            AppendMarkdownHeader(sb, visibleColumns, columnWidths);
+
+            // Add separator row
+            AppendMarkdownSeparator(sb, visibleColumns, columnWidths);
+
+            // Add data rows
+            AppendMarkdownData(sb, visibleColumns, columnWidths);
+
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Gets a clean cell value properly formatted for Markdown
+        /// </summary>
+        /// <param name="cell">The DataGridViewCell to get the value from</param>
+        /// <returns>A string representing the cell value, cleaned for Markdown</returns>
+        private static string GetCleanCellValue(DataGridViewCell cell)
+        {
+            var value = cell.FormattedValue?.ToString() ?? string.Empty;
+            return CleanMarkdownText(value);
+        }
+
+        /// <summary>
+        /// Cleans text for markdown by replacing pipe characters and newlines
+        /// </summary>
+        private static string CleanMarkdownText(string text)
+        {
+            // Escape backslashes first to avoid double-escaping
+            return text?
+                .Replace("\\", "\\\\")
+                .Replace("|", "&#124;")
+                .Replace("*", "\\*")
+                .Replace("_", "\\_")
+                .Replace("[", "\\[")
+                .Replace("]", "\\]")
+                .Replace("(", "\\(")
+                .Replace(")", "\\)")
+                .Replace("#", "\\#")
+                .Replace(">", "\\>")
+                .Replace("`", "\\`")
+                .Replace("\n", " ")
+                .Replace("\r", "") ?? string.Empty;
+        }
+
+        /// <summary>
+        /// Returns an array of integers representing the maximum width for each column passed in.
+        /// </summary>
+        /// <param name="columns">Array of columns (e.g. filter for visible columns)</param>
+        /// <returns>Array of int representing the maximum width for each column passed in</returns>
+        private int[] CalculateColumnWidths(IReadOnlyList<DataGridViewColumn> columns)
+        {
+            var columnWidths = new int[columns.Count];
+
+            // Calculate width for headers
+            for (var i = 0; i < columns.Count; i++)
+            {
+                var headerText = CleanMarkdownText(columns[i].HeaderText);
+                columnWidths[i] = Math.Max(columnWidths[i], headerText.Length);
+            }
+
+            // Calculate width for data cells
+            foreach (DataGridViewRow row in Rows)
+            {
+                if (row.IsNewRow || !row.Visible) continue;
+
+                for (var i = 0; i < columns.Count; i++)
+                {
+                    var value = GetCleanCellValue(row.Cells[columns[i].Index]);
+                    columnWidths[i] = Math.Max(columnWidths[i], value.Length);
+                }
+            }
+
+            return columnWidths;
+        }
+
+        /// <summary>
+        /// Append the markdown header row to the StringBuilder
+        /// </summary>
+        private static void AppendMarkdownHeader(StringBuilder sb, IReadOnlyList<DataGridViewColumn> visibleColumns, IReadOnlyList<int> columnWidths)
+        {
+            sb.Append('|');
+            for (var i = 0; i < visibleColumns.Count; i++)
+            {
+                var headerText = CleanMarkdownText(visibleColumns[i].HeaderText);
+                sb.Append(' ');
+                sb.Append(columnWidths != null ? headerText.PadRight(columnWidths[i]) : headerText);
+                sb.Append(" |");
+            }
+            sb.AppendLine();
+        }
+
+        /// <summary>
+        /// Append the markdown separator row to the StringBuilder
+        /// </summary>
+        private static void AppendMarkdownSeparator(StringBuilder sb, IReadOnlyList<DataGridViewColumn> visibleColumns, IReadOnlyList<int> columnWidths)
+        {
+            sb.Append('|');
+            for (var i = 0; i < visibleColumns.Count; i++)
+            {
+                sb.Append(' ');
+                if (columnWidths != null)
+                {
+                    sb.Append('-', columnWidths[i]);
+                }
+                else
+                {
+                    sb.Append("---");
+                }
+                sb.Append(" |");
+            }
+            sb.AppendLine();
+        }
+
+        /// <summary>
+        /// Append the markdown data rows to the StringBuilder
+        /// </summary>
+        private void AppendMarkdownData(StringBuilder sb, IReadOnlyList<DataGridViewColumn> visibleColumns, IReadOnlyList<int> columnWidths)
+        {
+            foreach (DataGridViewRow row in Rows)
+            {
+                if (row.IsNewRow || !row.Visible) continue;
+
+                sb.Append('|');
+                for (var i = 0; i < visibleColumns.Count; i++)
+                {
+                    var value = GetCleanCellValue(row.Cells[visibleColumns[i].Index]);
+                    sb.Append(' ');
+                    sb.Append(columnWidths != null ? value.PadRight(columnWidths[i]) : value);
+                    sb.Append(" |");
+                }
+                sb.AppendLine();
+            }
+        }
+
+        /// <summary>
+        /// Copy the DataGridView as JSON to the clipboard using System.Text.Json
+        /// </summary>
+        /// <param name="prettify">Option to format JSON with indentation for readability</param>
+        public void CopyAsJson(bool prettify = false)
+        {
+            if (Columns.Cast<DataGridViewColumn>().Count(c => c.Visible) == 0)
+            {
+                MessageBox.Show("No data to copy", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            // UnsafeRelaxedJsonEscaping results in more human readable JSON by not escaping characters like <, >, &
+            // Potentially less secure if JSON is being embedded in HTML, but we are copying to clipboard.
+            var jsonText = ConvertToJson(prettify, JavaScriptEncoder.UnsafeRelaxedJsonEscaping);
+            Clipboard.SetText(jsonText);
+        }
+
+        /// <summary>
+        /// Convert the DataGridView to JSON using System.Text.Json
+        /// </summary>
+        /// <param name="prettify">Option to format JSON with indentation for readability</param>
+        /// <param name="encoder">JavaScriptEncoder to use for encoding special characters</param>
+        /// <returns>JSON text</returns>
+        public string ConvertToJson(bool prettify, JavaScriptEncoder encoder)
+        {
+            encoder ??= JavaScriptEncoder.UnsafeRelaxedJsonEscaping;
+            var visibleColumns = Columns.Cast<DataGridViewColumn>().Where(c => c.Visible).ToList();
+            var rows = new List<Dictionary<string, object>>();
+
+            foreach (DataGridViewRow row in Rows)
+            {
+                if (row.IsNewRow || !row.Visible) continue;
+
+                var rowData = new Dictionary<string, object>();
+                var usedColumnNames = new HashSet<string>();
+                foreach (var column in visibleColumns)
+                {
+                    var baseColumnName = column.HeaderText.Replace("\n", " ");
+                    var columnName = baseColumnName;
+                    int suffix = 1;
+                    // Ensure unique column names in case of duplicates
+                    while (usedColumnNames.Contains(columnName))
+                    {
+                        columnName = $"{baseColumnName}_{suffix}";
+                        suffix++;
+                    }
+                    usedColumnNames.Add(columnName);
+
+                    var value = row.Cells[column.Index].Value;
+
+                    // Convert value to appropriate JSON-serializable type
+                    rowData[columnName] = ConvertToJsonCompatibleValue(value, column);
+                }
+                rows.Add(rowData);
+            }
+
+            var options = new JsonSerializerOptions
+            {
+                WriteIndented = prettify,
+                DefaultIgnoreCondition = JsonIgnoreCondition.Never,
+                Encoder = encoder
+            };
+
+            return JsonSerializer.Serialize(rows, options);
+        }
+
+        /// <summary>
+        /// Converts a cell value to a JSON-compatible type
+        /// </summary>
+        private static object ConvertToJsonCompatibleValue(object value, DataGridViewColumn column)
+        {
+            if (value == null || value == DBNull.Value)
+            {
+                return null;
+            }
+
+            var columnType = column.ValueType ?? value.GetType();
+
+            // Handle specific types that need conversion
+            if (columnType == typeof(byte[]))
+            {
+                // Convert byte array to Base64 string for JSON compatibility
+                return Convert.ToBase64String((byte[])value);
+            }
+
+            if (columnType == typeof(DateTime) || columnType == typeof(DateTimeOffset))
+            {
+                // DateTime and DateTimeOffset are automatically serialized to ISO 8601 format
+                return value;
+            }
+
+            // All other types (string, int, bool, decimal, etc.) are handled natively by System.Text.Json
+            return value;
+        }
+
+        private ToolStripMenuItem GetCopyAsJsonMenuItem()
+        {
+            var menuItem = new ToolStripMenuItem("As JSON", Properties.Resources.JsonFile);
+            menuItem.DropDownItems.AddRange([
+                new ToolStripMenuItem("Compact", Properties.Resources.JsonFile, (_, _) => CopyAsJson(false)),
+                new ToolStripMenuItem("Prettified", Properties.Resources.PrettyCode, (_, _) => CopyAsJson(true))
+            ]);
+            return menuItem;
         }
     }
 }

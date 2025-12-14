@@ -2,6 +2,7 @@
 using DBADashGUI.Theme;
 using Microsoft.Data.SqlClient;
 using System;
+using System.ComponentModel;
 using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
@@ -17,6 +18,7 @@ namespace DBADashServiceConfig
             this.ApplyTheme();
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string ConnectionString { get; set; }
 
         private DataTable dtAvailable;
@@ -42,7 +44,7 @@ namespace DBADashServiceConfig
         {
             try
             {
-                if(string.IsNullOrEmpty(ConnectionString))
+                if (string.IsNullOrEmpty(ConnectionString))
                 {
                     await PromptConnection();
                     return;
@@ -268,7 +270,7 @@ namespace DBADashServiceConfig
                 };
                 frm.Controls.Add(dgvPreview);
                 frm.ApplyTheme();
-                frm.Show();
+                frm.ShowSingleInstance();
             }
             catch (Exception ex)
             {

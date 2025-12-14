@@ -1,15 +1,16 @@
-﻿using DBADash.Messaging;
+﻿using DBADash;
+using DBADash.Messaging;
 using DBADashGUI.CustomReports;
+using DBADashGUI.Messaging;
 using DBADashGUI.SchemaCompare;
 using DBADashGUI.Theme;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using DBADash;
-using DBADashGUI.Messaging;
 
 namespace DBADashGUI.Performance
 {
@@ -25,25 +26,45 @@ namespace DBADashGUI.Performance
             dgvDrillDown.RowsAdded += (sender, args) => topQueriesResult.CellHighlightingRules.FormatRowsAdded((DataGridView)sender, args);
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public byte[] QueryHash { get; set; } = null;
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public byte[] PlanHash { get; set; } = null;
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public long? QueryId { get; set; }
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public long? PlanId { get; set; }
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool UseGlobalTime { get => !tsDateRange.Visible; set => tsDateRange.Visible = !value; }
 
         public void SetContext(DBADashContext _context)
         {
             if (_context != CurrentContext)
             {
-                dgv.DataSource = null;
-                txtObjectName.Text = string.Empty;
-                txtPlan.Text = string.Empty;
-                splitContainer1.Panel2Collapsed = true;
-                dgvDrillDown.DataSource = null;
-                includeWaitsToolStripMenuItem.Enabled = _context.ProductVersion?.Major >= 14 || _context.AzureInstanceIDs.Count > 0;
-                lblStatus.Text = string.Empty;
+                CurrentContext = _context;
+                SetContext();
             }
-            tsExecute.Text = string.IsNullOrEmpty(_context.DatabaseName) ? "Execute (ALL Databases)" : "Execute";
-            CurrentContext = _context;
+        }
+
+        private void SetContext()
+        {
+            if (CurrentContext == null) return;
+            var objectName = QueryHash != null ? QueryHash.ToHexString(true) : QueryId.HasValue ? QueryId.ToString() : CurrentContext.Type.IsQueryStoreObjectType() ? CurrentContext.ObjectName : string.Empty;
+            var plan = PlanHash != null ? PlanHash.ToHexString(true) : PlanId.HasValue ? PlanId.ToString() : string.Empty;
+            dgv.DataSource = null;
+            txtObjectName.Text = objectName;
+            txtObjectName.Enabled = objectName == string.Empty;
+            txtPlan.Text = plan;
+            txtPlan.Enabled = plan == string.Empty;
+            splitContainer1.Panel2Collapsed = true;
+            dgvDrillDown.DataSource = null;
+            includeWaitsToolStripMenuItem.Enabled = CurrentContext.ProductVersion?.Major >= 14 || CurrentContext.AzureInstanceIDs.Count > 0;
+            lblStatus.Text = string.Empty;
+            tsExecute.Text = string.IsNullOrEmpty(CurrentContext.DatabaseName) ? "Execute (ALL Databases)" : "Execute";
         }
 
         private int top = 25;
@@ -66,11 +87,6 @@ namespace DBADashGUI.Performance
 
         public async void RefreshData()
         {
-            txtObjectName.Enabled = QueryHash == null && PlanHash == null;
-            txtPlan.Enabled = QueryHash == null && PlanHash == null;
-            txtPlan.Text = PlanHash != null ? PlanHash.ToHexString(true) : txtPlan.Text;
-            txtObjectName.Text = QueryHash != null ? QueryHash.ToHexString(true) : txtObjectName.Text;
-
             if (lblStatus.Text == messageSentMessage)
             {
                 MessageBox.Show(@"Please wait for the current operation to complete", "Busy", MessageBoxButtons.OK,
@@ -564,7 +580,7 @@ namespace DBADashGUI.Performance
             topQueriesResult.LinkColumns?.TryGetValue(colName, out linkColumnInfo);
             try
             {
-                linkColumnInfo?.Navigate(CurrentContext, _dgv.Rows[e.RowIndex], 0);
+                linkColumnInfo?.Navigate(CurrentContext, _dgv.Rows[e.RowIndex], 0, this);
             }
             catch (Exception ex)
             {
@@ -739,8 +755,7 @@ namespace DBADashGUI.Performance
             SetGroupBy(QueryStoreTopQueriesMessage.QueryStoreGroupByEnum.query_id);
             SetSort("total_cpu_time_ms");
             SetTop(25);
-            txtPlan.Text = string.Empty;
-            txtObjectName.Text = string.Empty;
+            SetContext();
             tsNearestInterval.Checked = true;
             parallelPlansOnlyToolStripMenuItem.Checked = false;
             SetMinimumPlanCount(1);

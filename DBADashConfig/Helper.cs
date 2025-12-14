@@ -1,4 +1,5 @@
 ﻿using DBADash;
+using Microsoft.Data.SqlClient;
 using Serilog;
 using System.Runtime.InteropServices;
 
@@ -113,6 +114,10 @@ namespace DBADashConfig
                         SharedData.MarkInstanceDeleted(connectionId, dest.ConnectionString);
                     }
                 }
+                catch (SqlException ex) when (ex.Message == "Instance not found")
+                {
+                    Log.Warning("Instance with ConnectionID {ConnectionID} not found in {Destination}", connectionId, dest.ConnectionForPrint);
+                }
                 catch (Exception ex)
                 {
                     Log.Error(ex, "Error marking instance {status} in {Destination}", status, dest.ConnectionForPrint);
@@ -157,6 +162,10 @@ namespace DBADashConfig
                 PersistXESessions = o.PersistXESessions ?? false,
                 CollectTempDB = o.CollectTempDB ?? false,
                 CollectTranBeginTime = o.CollectTranBeginTime ?? true,
+                WriteToSecondaryDestinations = o.WriteToSecondaryDestinations ?? true,
+                ScriptAgentJobs = o.ScriptAgentJobs ?? true,
+                CollectTaskWaits = o.CollectTaskWaits ?? false,
+                CollectCursors = o.CollectCursors ?? false
             };
             if (!o.SkipValidation)
             {
@@ -223,7 +232,7 @@ namespace DBADashConfig
             }
         }
 
-        public static void AddDestination(CollectionConfig config, Options o)
+        public static async Task AddDestination(CollectionConfig config, Options o)
         {
             if (string.IsNullOrEmpty(o.ConnectionString))
             {
@@ -238,7 +247,7 @@ namespace DBADashConfig
                 if (!o.SkipValidation)
                 {
                     Log.Information("Validating connection...");
-                    config.ValidateDestination();
+                    await config.ValidateDestinationAsync();
                     Log.Information("Validated");
                 }
             }
@@ -255,7 +264,7 @@ namespace DBADashConfig
                 {
                     Log.Information("Validating connection...");
 
-                    CollectionConfig.ValidateDestination(con);
+                    await CollectionConfig.ValidateDestinationAsync(con);
                     Log.Information("Validated");
                 }
 

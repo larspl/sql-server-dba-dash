@@ -54,6 +54,13 @@ BEGIN
 						   t.total_elapsed_time,
 						   t.tempdb_alloc_page_count,
 						   t.tempdb_dealloc_page_count,
+						   t.task_wait_type_1,
+						   t.task_wait_time_1,
+						   t.task_wait_type_2,
+						   t.task_wait_time_2,
+						   t.task_wait_type_3,
+						   t.task_wait_time_3,
+						   t.dop,
 						   ROW_NUMBER() OVER(PARTITION BY t.session_id ORDER BY t.cpu_time DESC) rnum
 					FROM  @RunningQueries t
 	)
@@ -95,7 +102,14 @@ BEGIN
 		is_implicit_transaction,
 		total_elapsed_time,
 		tempdb_alloc_page_count,
-		tempdb_dealloc_page_count
+		tempdb_dealloc_page_count,
+		task_wait_type_1,
+		task_wait_time_1,
+		task_wait_type_2,
+		task_wait_time_2,
+		task_wait_type_3,
+		task_wait_time_3,
+		dop
 	)
 	SELECT  SnapshotDateUTC,
 	    session_id,
@@ -133,7 +147,14 @@ BEGIN
 		is_implicit_transaction,
 		total_elapsed_time,
 		tempdb_alloc_page_count,
-		tempdb_dealloc_page_count
+		tempdb_dealloc_page_count,
+		task_wait_type_1,
+		task_wait_time_1,
+		task_wait_type_2,
+		task_wait_time_2,
+		task_wait_type_3,
+		task_wait_time_3,
+		dop
 	FROM deDupe
 	WHERE deDupe.rnum=1
 
@@ -177,7 +198,15 @@ BEGIN
 			MAX(CASE WHEN calc.TransactionDurationMs<0 THEN 0 ELSE calc.TransactionDurationMs END) AS OldestTransactionMs,
 			SUM(CASE WHEN R.tempdb_alloc_page_count < R.tempdb_dealloc_page_count THEN 0 ELSE (R.tempdb_alloc_page_count - R.tempdb_dealloc_page_count) END) AS TempDBCurrentPageCount
     FROM @RunningQueriesDD R 
-    CROSS APPLY(SELECT ISNULL(CAST(total_elapsed_time AS BIGINT),DATEDIFF_BIG(ms,ISNULL(start_time_utc,last_request_start_time_utc),R.SnapshotDateUTC)) AS Duration,
+    CROSS APPLY(SELECT 	/* 
+						If the total_elapsed_time and calculated duration are within 500ms or the calculated duration is negative and total_elapsed_time is less than 30 seconds, use total_elapsed_time.  
+						total_elapsed_time might offer better precision, but if it differs too much from the calculated duration, it might contain an error. #1491.  
+						For sleeping sessions, start_time will be NULL and the calculated duration will be based on last request start time
+						*/
+					   CASE WHEN (R.start_time_utc > R.SnapshotDateUTC AND R.total_elapsed_time < 30000) 
+									OR ABS(DATEDIFF_BIG(ms,R.start_time_utc,R.SnapshotDateUTC)-CAST(R.total_elapsed_time AS BIGINT)) < CAST(500 AS BIGINT) THEN CAST(R.total_elapsed_time AS BIGINT) 
+							WHEN R.start_time_utc < R.SnapshotDateUTC OR R.start_time_utc IS NULL  THEN DATEDIFF_BIG(ms,ISNULL(R.start_time_utc,R.last_request_start_time_utc),R.SnapshotDateUTC) 
+							ELSE 0 END AS Duration,
 						DATEDIFF_BIG(ms,R.transaction_begin_time_utc,R.SnapshotDateUTC) AS TransactionDurationMs,
                         CASE WHEN wait_resource LIKE '2:%' 
 			                    OR wait_resource LIKE 'PAGE 2:%'
@@ -270,7 +299,14 @@ BEGIN
 		is_implicit_transaction,
 		total_elapsed_time,
 		tempdb_alloc_page_count,
-		tempdb_dealloc_page_count
+		tempdb_dealloc_page_count,
+		task_wait_type_1,
+		task_wait_time_1,
+		task_wait_type_2,
+		task_wait_time_2,
+		task_wait_type_3,
+		task_wait_time_3,
+		dop
     )
     SELECT @InstanceID as InstanceID,
         SnapshotDateUTC,
@@ -309,7 +345,14 @@ BEGIN
 		is_implicit_transaction,
 		total_elapsed_time,
 		tempdb_alloc_page_count,
-		tempdb_dealloc_page_count
+		tempdb_dealloc_page_count,
+		task_wait_type_1,
+		task_wait_time_1,
+		task_wait_type_2,
+		task_wait_time_2,
+		task_wait_type_3,
+		task_wait_time_3,
+		dop
     FROM @RunningQueriesDD;
 
 	EXEC dbo.CollectionDates_Upd @InstanceID = @InstanceID,  
