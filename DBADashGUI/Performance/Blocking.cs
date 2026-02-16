@@ -1,12 +1,15 @@
-﻿using DBADashGUI.Theme;
-using LiveCharts;
-using LiveCharts.Configurations;
-using LiveCharts.Wpf;
+﻿using DBADashGUI.Charts;
+using DBADashGUI.Theme;
+using LiveChartsCore;
+using LiveChartsCore.Defaults;
+using LiveChartsCore.SkiaSharpView;
+using LiveChartsCore.SkiaSharpView.Painting;
 using Microsoft.Data.SqlClient;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
-using System.Globalization;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace DBADashGUI.Performance
@@ -19,8 +22,10 @@ namespace DBADashGUI.Performance
         }
 
         private int InstanceID;
-        private double maxBlockedTime;
+        private long maxBlockedTime;
         private int databaseID;
+
+        private List<DataRow> _rows;
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool CloseVisible
@@ -75,7 +80,7 @@ namespace DBADashGUI.Performance
             > 3600000 => 60,
             > 600000 => 30,
             > 60000 => 10,
-            _ => 5
+            _ => 8  // Increased from 5 to 8 for better tooltip hit detection
         };
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -93,92 +98,164 @@ namespace DBADashGUI.Performance
         {
             var dt = GetDT();
 
-            chartBlocking.AxisX.Clear();
-            chartBlocking.AxisY.Clear();
-            chartBlocking.Series.Clear();
-            maxBlockedTime = 0;
+            var fromTicks = DateRange.FromUTC.ToAppTimeZone().Ticks;
+            var toTicks = Math.Min(DateHelper.AppNow.Ticks, DateRange.ToUTC.ToAppTimeZone().Ticks);
 
-            var points = new BlockingPoint[dt.Rows.Count];
-            var i = 0;
-            double Ymax = 100;
+            // Create theme-aware paint for labels
+            var labelPaint = CreateLabelPaint();
 
-            foreach (DataRow r in dt.Rows)
+            // Configure axes first (even if no data) to show proper date labels
+            chartBlocking.XAxes = new[]
             {
-                var dtm = (DateTime)r["SnapshotDateUTC"];
-                var blockedCnt = (int)r["BlockedSessionCount"];
-                var blockedTime = (long)r["BlockedWaitTime"];
-                var snapshotID = (int)r["BlockingSnapshotID"];
-                if (blockedTime > maxBlockedTime)
+                new Axis
                 {
-                    maxBlockedTime = blockedTime;
+                    Labeler = value => new DateTime((long)value).ToString(DateRange.DateFormatString),
+                    MinLimit = fromTicks,
+                    MaxLimit = toTicks,
+                    LabelsPaint = labelPaint,
+                    NamePaint = labelPaint
                 }
-                points[i] = new BlockingPoint(snapshotID, dtm.ToAppTimeZone(), blockedCnt, blockedTime);
-                Ymax = blockedCnt > Ymax ? blockedCnt : Ymax;
-                i += 1;
+            };
+
+            chartBlocking.YAxes = new[]
+            {
+                new Axis
+                {
+                    Labeler = value => value.ToString("0"),
+                    MinLimit = 0,
+                    LabelsPaint = labelPaint,
+                    NamePaint = labelPaint,
+                    Name = "Blocked Sessions"
+                }
+            };
+
+            if (dt.Rows.Count == 0)
+            {
+                chartBlocking.Series = Array.Empty<ISeries>();
+                lblBlocking.Text = databaseID > 0 ? "Blocking: Database" : "Blocking: Instance";
+                toolStrip1.Tag = databaseID > 0 ? "ALT" : null;
+                toolStrip1.ApplyTheme(DBADashUser.SelectedTheme);
+                return;
             }
 
-            var mapper = Mappers.Weighted<BlockingPoint>()
-                .X(value => value.SnapshotDate.Ticks)
-                .Y(value => value.BlockedSessions)
-                .Weight(value => value.BlockedWaitTime);
+            maxBlockedTime = 0;
 
-            SeriesCollection s1 = new(mapper)
+            var rows = dt.Rows.Cast<DataRow>().ToList();
+            _rows = rows;
+
+            var points = rows
+                .Select(r =>
                 {
-                    new ScatterSeries
-                    {
-                    Title= "Blocking Snapshot",
-                    Values = new ChartValues<BlockingPoint>(points),
-                    MinPointShapeDiameter = 5,
-                    MaxPointShapeDiameter = MaxPointShapeDiameter
-                    }
-                };
+                    var dtm = ((DateTime)r["SnapshotDateUTC"]).ToAppTimeZone();
+                    var blockedCnt = (int)r["BlockedSessionCount"];
+                    var blockedTime = (long)r["BlockedWaitTime"];
 
-            chartBlocking.AxisX.Add(new Axis
+                    if (blockedTime > maxBlockedTime)
+                    {
+                        maxBlockedTime = blockedTime;
+                    }
+
+                    // Use DateTimePoint instead of ObservablePoint
+                    return new DateTimePoint(dtm, blockedCnt);
+                })
+                .ToArray();
+
+            var scatter = new ScatterSeries<DateTimePoint>
             {
-                LabelFormatter = val => new DateTime((long)val).ToString(DateRange.DateFormatString),
-                MinValue = DateRange.FromUTC.ToAppTimeZone().Ticks,
-                MaxValue = Math.Min(DateHelper.AppNow.Ticks, DateRange.ToUTC.ToAppTimeZone().Ticks)
-            });
-            chartBlocking.AxisY.Add(new Axis
-            {
-                Title = "Blocked Sessions",
-                LabelFormatter = val => val.ToString(CultureInfo.CurrentCulture),
-                MinValue = 0,
-                MaxValue = Ymax
-            });
-            chartBlocking.Series = s1;
+                Values = points,
+                GeometrySize = MaxPointShapeDiameter,
+                Name = "Blocked Sessions"
+            };
+
+            chartBlocking.Series = new ISeries[] { scatter };
+
+            // Update Y axis max based on actual data
+            var yMax = Math.Max(100, rows.Max(r => (int)r["BlockedSessionCount"]));
+            var yAxes = chartBlocking.YAxes.ToArray();
+            yAxes[0].MaxLimit = yMax;
+            chartBlocking.YAxes = yAxes;
 
             lblBlocking.Text = databaseID > 0 ? "Blocking: Database" : "Blocking: Instance";
             toolStrip1.Tag = databaseID > 0 ? "ALT" : null; // set tag to ALT to use the alternate menu renderer
             toolStrip1.ApplyTheme(DBADashUser.SelectedTheme);
+
+            // Enable custom tooltips with custom formatter to show blocked time
+            chartBlocking.EnableCustomTooltips(point =>
+            {
+                var index = point.Index;
+                if (index < 0 || index >= rows.Count) 
+                    return point.Coordinate.PrimaryValue.ToString("N0");
+
+                var row = rows[index];
+                var blockedCnt = (int)row["BlockedSessionCount"];
+                var blockedTime = (long)row["BlockedWaitTime"];
+                var timeSpan = TimeSpan.FromMilliseconds(blockedTime);
+
+                // Show days if >= 1 day, otherwise just hh:mm:ss
+                var timeFormat = timeSpan.TotalDays >= 1 
+                    ? $"{(int)timeSpan.TotalDays}d {timeSpan:hh\\:mm\\:ss}"
+                    : $"{timeSpan:hh\\:mm\\:ss}";
+
+                return $"{blockedCnt:N0} ({timeFormat})";
+            });
         }
 
-        private void ChartBlocking_DataClick(object sender, ChartPoint chartPoint)
+        private SolidColorPaint CreateLabelPaint()
         {
-            var blockPoint = (BlockingPoint)chartPoint.Instance;
-            RunningQueriesViewer frm = new()
-            {
-                SnapshotDateFrom = blockPoint.SnapshotDate.AppTimeZoneToUtc(),
-                SnapshotDateTo = blockPoint.SnapshotDate.AppTimeZoneToUtc(),
-                InstanceID = InstanceID,
-                ShowRootBlockers = true,
-            };
-            frm.Show(this);
+            return DBADashUser.SelectedTheme.ThemeIdentifier == ThemeType.Dark
+                ? new SolidColorPaint(DashColors.White.ToSKColor())
+                : new SolidColorPaint(DashColors.TrimbleBlueDark.ToSKColor());
         }
 
         private void Blocking_Load(object sender, EventArgs e)
         {
-            chartBlocking.DataClick += ChartBlocking_DataClick;
+            chartBlocking.MouseDown += ChartBlocking_MouseDown;
         }
 
         private void TsClose_Click(object sender, EventArgs e)
         {
-            Close.Invoke(this, EventArgs.Empty);
+            Close?.Invoke(this, EventArgs.Empty);
         }
 
         private void TsUp_Click(object sender, EventArgs e)
         {
-            MoveUp.Invoke(this, EventArgs.Empty);
+            MoveUp?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ChartBlocking_MouseDown(object sender, MouseEventArgs e)
+        {
+            if (_rows == null || _rows.Count == 0)
+            {
+                return;
+            }
+
+            // Ask LiveCharts which points are under the mouse
+            var foundPoints = chartBlocking.GetPointsAt(
+                new LiveChartsCore.Drawing.LvcPointD(e.Location.X, e.Location.Y));
+
+            var firstPoint = foundPoints.FirstOrDefault();
+            if (firstPoint is null)
+            {
+                return;
+            }
+
+            var index = firstPoint.Index;
+            if (index < 0 || index >= _rows.Count)
+            {
+                return;
+            }
+
+            var row = _rows[index];
+            var snapshotDateLocal = ((DateTime)row["SnapshotDateUTC"]).ToAppTimeZone();
+
+            var frm = new RunningQueriesViewer
+            {
+                SnapshotDateFrom = snapshotDateLocal.AppTimeZoneToUtc(),
+                SnapshotDateTo = snapshotDateLocal.AppTimeZoneToUtc(),
+                InstanceID = InstanceID,
+                ShowRootBlockers = true
+            };
+            frm.Show(this);
         }
     }
 }

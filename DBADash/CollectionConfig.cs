@@ -1,4 +1,5 @@
-﻿using DBADashService;
+﻿using DBADash.InstanceMetadata;
+using DBADashService;
 using Microsoft.Data.SqlClient;
 using Newtonsoft.Json;
 using Serilog;
@@ -6,14 +7,22 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using DBADash.InstanceMetadata;
 using static DBADash.DBADashConnection;
 
 namespace DBADash
 {
     public class CollectionConfig : BasicConfig
     {
-        public int ServiceThreads = -1;
+        public int ServiceThreads
+        {
+            get;
+            set { field = value; _cachedThreadCount = null; }
+        } = -1;
+
+        public int SchedulerThreads { get; set; } = -1;
+        public int? ChannelCapacity { get; set; }
+
+        private int? _cachedThreadCount;
         private string _secretKey;
         private bool wasEncryptionPerformed;
         private readonly string myString = "g&hAs2&mVOLwE6DqO!I5";
@@ -34,10 +43,32 @@ namespace DBADash
         public int? PurgeDataCommandTimeout { get; set; }
         public int? AddPartitionsCommandTimeout { get; set; }
 
+        public bool? UseQueueBasedScheduling { get; set; }
+
         public const int DefaultImportCommandTimeout = 60;
         public const int DefaultPurgeDataCommandTimeout = 1200;
         public const int DefaultAddPartitionsCommandTimeout = 300;
         public const int DefaultFailedLoginsBackfillMinutes = 1440;
+        private const bool DefaultUseQueueBasedScheduling = true;
+        private const double DefaultLowPriorityQueueMaxThreadPercentage = 0.25;
+
+        public double? LowPriorityQueueMaxThreadPercentage
+        {
+            get => field;
+            set
+            {
+                if (value == null || (value > 0 && value <= 1))
+                {
+                    field = value;
+                }
+                else
+                {
+                    throw new ArgumentException("LowPriorityQueueMaxThreadPercentage must be null (to use the default) or greater than 0 and less than or equal to 1.");
+                }
+            }
+        }
+
+        public double GetLowPriorityQueueMaxThreadPercentage() => LowPriorityQueueMaxThreadPercentage ?? DefaultLowPriorityQueueMaxThreadPercentage;
 
         public bool EnableMessaging { get; set; } = true;
 
@@ -63,13 +94,22 @@ namespace DBADash
 
         public const int DefaultAlertProcessingStartupDelaySeconds = 60;
 
-        public HashSet<InstanceMetadataProviders.Providers>EnabledMetadataProviders { get; set; } = new();
+        public HashSet<InstanceMetadataProviders.Providers> EnabledMetadataProviders { get; set; } = new();
+
+        public bool IsUseQueueBasedScheduling() => UseQueueBasedScheduling ?? DefaultUseQueueBasedScheduling;
 
         public int GetThreadCount()
         {
+            // Return cached value if already calculated
+            if (_cachedThreadCount.HasValue)
+            {
+                return _cachedThreadCount.Value;
+            }
+
             if (ServiceThreads > 0)
             {
                 Log.Information("Threads {threadCount} (user)", ServiceThreads);
+                _cachedThreadCount = ServiceThreads;
                 return ServiceThreads;
             }
 
@@ -85,12 +125,56 @@ namespace DBADash
             var processorLimit = processorCount * maxThreadsPerProcessor; // Max of 4 threads per processor.  Threads will often be idle waiting for queries to complete
             var threads = Convert.ToInt32(Math.Min(processorLimit, connectionThreadCalc)); // Use the lower of the two calculations
             threads = int.Clamp(threads, minimumCalcThreads, maximumCalcThreads); // Clamp to minimum and maximum
+
             Log.Information(
                 "Calculated thread count: {ThreadCount}. " +
                 "Based on {ConnectionCount} connections ({ConnectionThreads} threads) " +
                 "and {ProcessorCount} processors ({ProcessorLimit} max threads). " +
                 "Clamped between {MinThreads}-{MaxThreads}",
-                threads, connectionCount, connectionThreadCalc , processorCount, processorLimit, minimumCalcThreads, maximumCalcThreads);
+                threads, connectionCount, connectionThreadCalc, processorCount, processorLimit, minimumCalcThreads, maximumCalcThreads);
+
+            // Cache the calculated value
+            _cachedThreadCount = threads;
+            return threads;
+        }
+
+        /// <summary>
+        /// Get the number of threads for Quartz scheduler.
+        /// In traditional mode: these threads do all the work (scheduling + collection execution)
+        /// In queue-based mode: these threads only do lightweight scheduling/enqueue operations
+        /// </summary>
+        public int GetSchedulerThreadCount()
+        {
+            // Traditional scheduling: scheduler threads do all the work, use ServiceThreads/calculated
+            if (!IsUseQueueBasedScheduling())
+            {
+                var threads = ServiceThreads > 0 ? ServiceThreads : GetThreadCount();
+                Log.Information("Scheduler thread count: {threads} (traditional scheduling - these threads do all work)", threads);
+                return threads;
+            }
+
+            // Queue-based scheduling: use explicit SchedulerThreads if set
+            if (SchedulerThreads > 0)
+            {
+                Log.Information("Scheduler thread count: {threads} (user-configured, queue-based scheduling)", SchedulerThreads);
+                return SchedulerThreads;
+            }
+
+            // Queue-based scheduling default: 10 threads for lightweight scheduling/enqueue operations
+            const int defaultSchedulerThreads = 10;
+            Log.Information("Scheduler thread count: {schedulerThreads} (default for queue-based scheduling - lightweight scheduling/enqueue)",
+                defaultSchedulerThreads);
+            return defaultSchedulerThreads;
+        }
+
+        /// <summary>
+        /// Get the number of worker threads for CollectionWorkQueue (only used in queue-based scheduling).
+        /// These are the threads that actually execute collection work.
+        /// </summary>
+        public int GetWorkerThreadCount()
+        {
+            var threads = ServiceThreads > 0 ? ServiceThreads : GetThreadCount();
+            Log.Information("Worker thread count: {threads} (queue-based scheduling - collection processing threads)", threads);
             return threads;
         }
 
@@ -361,7 +445,7 @@ namespace DBADash
         {
             var newConnections = new List<DBADashSource>();
             using (var cn = new SqlConnection(masterConnection.SourceConnection.ConnectionString))
-            using (var cmd = new SqlCommand("SELECT name from sys.databases WHERE name <> 'master'", cn))
+            using (var cmd = new SqlCommand("SELECT name AS DB, @@SERVERNAME + '|' + name AS ConnectionID from sys.databases WHERE name <> 'master'", cn))
             {
                 cn.Open();
                 using var rdr = cmd.ExecuteReader();
@@ -372,7 +456,7 @@ namespace DBADash
                     builder.InitialCatalog = rdr.GetString(0);
                     var dbCn = masterConnection.DeepCopy();
                     dbCn.SourceConnection.ConnectionString = builder.ConnectionString;
-                    dbCn.ConnectionID = string.Empty;
+                    dbCn.ConnectionID = rdr.GetString(1);
 
                     if (!SourceExists(dbCn.SourceConnection.ConnectionString, true))
                     {

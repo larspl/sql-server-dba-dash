@@ -1,11 +1,10 @@
-﻿using Humanizer;
-using LiveCharts;
-using LiveCharts.Configurations;
-using LiveCharts.Defaults;
-using LiveCharts.Wpf;
+﻿using DBADashGUI.Charts;
+using Humanizer;
+using LiveChartsCore;
+using LiveChartsCore.Measure;
+using LiveChartsCore.SkiaSharpView;
 using Microsoft.Data.SqlClient;
 using System;
-using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
 using System.Linq;
@@ -27,12 +26,12 @@ namespace DBADashGUI.Performance
             public double Value { get; set; }
         }
 
-        public DateTimePoint x;
         private int instanceID;
         private DateTime lastWait = DateTime.MinValue;
         private int dateGrouping;
         private int mins;
         private DataTable dt;
+        private LegendPosition legendPosition = LegendPosition.Hidden;
 
         public event EventHandler<EventArgs> Close;
 
@@ -84,7 +83,7 @@ namespace DBADashGUI.Performance
 
             if (mins != DateRange.DurationMins)
             {
-                dateGrouping = DateHelper.DateGrouping(DateRange.DurationMins, 35);
+                dateGrouping = DateHelper.DateGrouping(DateRange.DurationMins, 65);
                 if (dateGrouping < 1)
                 {
                     dateGrouping = 1;
@@ -178,64 +177,34 @@ namespace DBADashGUI.Performance
 
         public void RefreshChart()
         {
-            waitChart.Series.Clear();
-            waitChart.AxisX.Clear();
-            waitChart.AxisY.Clear();
-            lastWait = DateTime.MinValue;
-
-            if (dt.Rows.Count == 0)
+            if (dt == null || dt.Rows.Count == 0)
             {
+                waitChart.Series = Array.Empty<ISeries>();
+                waitChart.XAxes = Array.Empty<Axis>();
+                waitChart.YAxes = Array.Empty<Axis>();
                 return;
             }
-            var dPoints = new Dictionary<string, ChartValues<DateTimePoint>>();
-            var current = string.Empty;
-            ChartValues<DateTimePoint> values = new();
-            foreach (DataRow r in dt.Rows)
-            {
-                var waitType = (string)r["WaitType"];
-                var time = (DateTime)r["Time"];
-                if (time > lastWait)
-                {
-                    lastWait = time;
-                }
-                if (current != waitType)
-                {
-                    if (values.Count > 0) { dPoints.Add(current, values); }
-                    values = new ChartValues<DateTimePoint>();
-                    current = waitType;
-                }
-                var metric = (string)tsMetric.Tag;
-                values.Add(new DateTimePoint(((DateTime)r["Time"]).ToAppTimeZone(), Convert.ToDouble(r[metric!])));
-            }
-            if (values.Count > 0)
-            {
-                dPoints.Add(current, values);
-                values = new ChartValues<DateTimePoint>();
-            }
 
-            var dayConfig = Mappers.Xy<DateTimePoint>()
-.X(dateModel => dateModel.DateTime.Ticks / TimeSpan.FromMinutes(dateGrouping == 0 ? 1 : dateGrouping).Ticks)
-.Y(dateModel => dateModel.Value);
+            // Get the selected metric column
+            var metricColumn = (string)tsMetric.Tag;
 
-            SeriesCollection s1 = new(dayConfig);
-            foreach (var x in dPoints)
+            // Use ChartHelper with SeriesColumn to group by WaitType
+            var config = new ChartConfiguration
             {
-                s1.Add(new StackedColumnSeries
-                {
-                    Title = x.Key,
-                    Values = x.Value
-                });
-            }
-            waitChart.Series = s1;
+                DateColumn = "Time",
+                MetricColumn = metricColumn,
+                SeriesColumn = "WaitType",  // Group data by WaitType - each becomes a series
+                ChartType = ChartTypes.StackedColumn,
+                ShowLegend = true,
+                LegendPosition = legendPosition,
+                XAxisMin = DateRange.FromUTC.ToAppTimeZone(),
+                XAxisMax = DateRange.ToUTC.ToAppTimeZone(),
+                YAxisLabel = Units,
+                YAxisFormat = "0.0",
+                YAxisMin = 0,
+            };
 
-            waitChart.AxisX.Add(new Axis
-            {
-                LabelFormatter = value => new DateTime((long)(value * TimeSpan.FromMinutes(dateGrouping == 0 ? 1 : dateGrouping).Ticks)).ToString(DateRange.DateFormatString)
-            });
-            waitChart.AxisY.Add(new Axis
-            {
-                LabelFormatter = val => val.ToString("0" + Units)
-            });
+            ChartHelper.UpdateChart(waitChart, dt, config);
         }
 
         private string Units
@@ -327,6 +296,17 @@ namespace DBADashGUI.Performance
             WaitSummaryDialog waitSummaryForm = new();
             waitSummaryForm.SetContext(new DBADashContext() { InstanceID = instanceID });
             await waitSummaryForm.ShowSingleInstanceAsync();
+        }
+
+        private void SetLegendPosition(object sender, EventArgs e)
+        {
+            var item = (ToolStripMenuItem)sender;
+            Enum.TryParse(item.Tag.ToString(), out legendPosition);
+            foreach (ToolStripMenuItem menuItem in tsLegend.DropDownItems.OfType<ToolStripMenuItem>())
+            {
+                menuItem.Checked = menuItem == item;
+            }
+            waitChart.LegendPosition = legendPosition;
         }
     }
 }

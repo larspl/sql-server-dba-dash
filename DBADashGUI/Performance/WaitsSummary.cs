@@ -1,10 +1,17 @@
-﻿using DBADashGUI.Theme;
+﻿using DBADashGUI.Charts;
+using DBADashGUI.Theme;
+using LiveChartsCore;
+using LiveChartsCore.Measure;
+using LiveChartsCore.SkiaSharpView;
+using LiveChartsCore.SkiaSharpView.Painting;
 using Microsoft.Data.SqlClient;
+using SkiaSharp;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
 using System.Diagnostics;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace DBADashGUI.Performance
@@ -24,6 +31,8 @@ namespace DBADashGUI.Performance
 
         private int dateGrouping = 1;
         private int mins;
+        private double lineSmoothness = ChartConfiguration.DefaultLineSmoothness;
+        private double geometrySize = ChartConfiguration.DefaultGeometrySize;
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Visible)]
         public int DateGrouping
@@ -143,7 +152,7 @@ namespace DBADashGUI.Performance
         {
             var ts = (ToolStripMenuItem)sender;
             columns[((string)ts.Tag)!].IsVisible = ts.Checked;
-            WaitChart1.UpdateColumnVisibility(columns);
+            RefreshChart();
         }
 
         private void RefreshChart()
@@ -163,15 +172,44 @@ namespace DBADashGUI.Performance
                 tsWaitType.Text = selectedWaitType;
                 splitGrid.Panel1Collapsed = false;
                 var dt = GetWaitsDT(selectedWaitType);
-                WaitChart1.LegendLocation = LiveCharts.LegendLocation.Bottom;
-                WaitChart1.Series.Clear();
-                WaitChart1.AddDataTable(dt, columns, "time");
-                WaitChart1.AxisX[0].MinValue = DateRange.FromUTC.ToAppTimeZone().Ticks;
-                WaitChart1.AxisX[0].MaxValue = DateRange.ToUTC.ToAppTimeZone().Ticks;
-                if (WaitChart1.AxisY.Count == 1)
+
+                if (dt == null || dt.Rows.Count == 0)
                 {
-                    WaitChart1.AxisY[0].MinValue = 0;
+                    WaitChart1.Series = Array.Empty<ISeries>();
+                    return;
                 }
+
+                // Get visible columns
+                var visibleColumns = columns.Where(c => c.Value.IsVisible).Select(c => c.Key).ToArray();
+
+                if (visibleColumns.Length == 0)
+                {
+                    WaitChart1.Series = Array.Empty<ISeries>();
+                    return;
+                }
+
+                // Create series names dictionary
+                var seriesNames = columns.ToDictionary(c => c.Key, c => c.Value.Name);
+
+                // Update chart using ChartHelper
+                var config = new ChartConfiguration
+                {
+                    DateColumn = "time",
+                    MetricColumns = visibleColumns,
+                    ChartType = ChartTypes.Line,
+                    ShowLegend = true,
+                    LegendPosition = LegendPosition.Bottom,
+                    LineSmoothness = lineSmoothness,
+                    GeometrySize = geometrySize,
+                    XAxisMin = DateRange.FromUTC.ToAppTimeZone(),
+                    XAxisMax = DateRange.ToUTC.ToAppTimeZone(),
+                    SeriesNames = seriesNames,
+                    YAxisLabel = string.Empty,
+                    YAxisFormat = "0.0",
+                    YAxisMin = 0
+                };
+
+                ChartHelper.UpdateChart(WaitChart1, dt, config);
             }
         }
 
@@ -220,13 +258,15 @@ namespace DBADashGUI.Performance
 
         private void TsSmooth_Click(object sender, EventArgs e)
         {
-            WaitChart1.DefaultLineSmoothness = Convert.ToDouble(((ToolStripMenuItem)sender).Tag);
+            lineSmoothness = Convert.ToDouble(((ToolStripMenuItem)sender).Tag);
+            RefreshChart();
         }
 
         private void PointSize_Click(object sender, EventArgs e)
         {
             var ts = (ToolStripMenuItem)sender;
-            WaitChart1.SetPointSize(Convert.ToInt32(ts.Tag));
+            geometrySize = Convert.ToInt32(ts.Tag);
+            RefreshChart();
         }
 
         private void TsExcel_Click(object sender, EventArgs e)

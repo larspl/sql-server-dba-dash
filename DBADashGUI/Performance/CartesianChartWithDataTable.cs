@@ -1,18 +1,53 @@
-﻿using LiveCharts;
-using LiveCharts.Defaults;
-using LiveCharts.Wpf;
+﻿using LiveChartsCore;
+using LiveChartsCore.Defaults;
+using LiveChartsCore.SkiaSharpView;
+using LiveChartsCore.SkiaSharpView.Painting;
+using SkiaSharp;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
 using System.Linq;
+using DBADashGUI.Charts;
 
 namespace DBADashGUI.Performance
 {
-    internal class CartesianChartWithDataTable : LiveCharts.WinForms.CartesianChart
+    internal class CartesianChartWithDataTable : LiveChartsCore.SkiaSharpView.WinForms.CartesianChart
     {
-        public int DefaultPointSize = 10;
-        private double _defaultLineSmoothness = 0.5;
+        public int DefaultPointSize = 8;
+        private double _defaultLineSmoothness = 0.2;
+        private bool _enableCustomTooltips = true;
+
+        public CartesianChartWithDataTable()
+        {
+            // Enable custom tooltips by default to avoid truncation issues
+            if (_enableCustomTooltips)
+            {
+                this.EnableCustomTooltips();
+            }
+        }
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Visible)]
+        [DefaultValue(true)]
+        public bool EnableCustomTooltips
+        {
+            get => _enableCustomTooltips;
+            set
+            {
+                if (_enableCustomTooltips != value)
+                {
+                    _enableCustomTooltips = value;
+                    if (value)
+                    {
+                        this.EnableCustomTooltips();
+                    }
+                    else
+                    {
+                        this.DisableCustomTooltips();
+                    }
+                }
+            }
+        }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Visible)]
         public double DefaultLineSmoothness
@@ -21,7 +56,8 @@ namespace DBADashGUI.Performance
             set
             {
                 _defaultLineSmoothness = value;
-                foreach (LineSeries s in Series.Cast<LineSeries>())
+                // LiveCharts2 LineSeries<T> uses GeometryFill/Stroke; smoothness handled via LineSmoothness
+                foreach (var s in Series.OfType<LineSeries<DateTimePoint>>())
                 {
                     s.LineSmoothness = _defaultLineSmoothness;
                 }
@@ -31,19 +67,20 @@ namespace DBADashGUI.Performance
         public void SetPointSize(int pointSize)
         {
             DefaultPointSize = pointSize;
-            foreach (LineSeries s in Series.Cast<LineSeries>())
+            foreach (var s in Series.OfType<LineSeries<DateTimePoint>>())
             {
-                s.PointGeometrySize = pointSize;
+                s.GeometrySize = pointSize;
             }
         }
 
-        public System.Windows.Media.Brush DefaultFill;
+        public SKColor? DefaultFill;
 
         public void UpdateColumnVisibility(Dictionary<string, ColumnMetaData> columns)
         {
-            foreach (LineSeries s in Series.Cast<LineSeries>())
+            foreach (var s in Series.OfType<LineSeries<DateTimePoint>>())
             {
-                s.Visibility = columns[(string)s.Tag].IsVisible ? System.Windows.Visibility.Visible : System.Windows.Visibility.Hidden;
+                var key = (string)s.Tag;
+                s.IsVisible = columns.TryGetValue(key, out var meta) && meta.IsVisible;
             }
         }
 
@@ -54,56 +91,106 @@ namespace DBADashGUI.Performance
             {
                 return;
             }
-            foreach (var s in columns.Keys)
+
+            // Build a local map of column name -> DateTimePoint[] for LiveCharts2
+            var columnPoints = new Dictionary<string, DateTimePoint[]>(columns.Count);
+
+            foreach (var key in columns.Keys)
             {
-                columns[s].Points = new DateTimePoint[cnt];
+                columnPoints[key] = new DateTimePoint[cnt];
             }
 
-            int i = 0;
-            foreach (DataRow r in dt.Rows)
+            var rows = dt.Rows.Cast<DataRow>().ToList();
+
+            for (var i = 0; i < rows.Count; i++)
             {
-                foreach (string s in columns.Keys)
+                var r = rows[i];
+                foreach (var key in columns.Keys)
                 {
-                    var v = r[s] == DBNull.Value ? 0 : Convert.ToDouble(r[s]);
+                    var v = r[key] == DBNull.Value ? 0 : Convert.ToDouble(r[key]);
                     var t = (DateTime)r[dateCol];
-                    if (convertToLocalTime) { t = t.ToAppTimeZone(); }
-                    columns[s].Points[i] = new DateTimePoint(t, v);
+                    if (convertToLocalTime)
+                    {
+                        t = t.ToAppTimeZone();
+                    }
+                    columnPoints[key][i] = new DateTimePoint(t, v);
                 }
-                i++;
             }
-
-            var sc = new SeriesCollection();
-            foreach (string s in columns.Keys)
+            var keys = columns.Keys.ToList();
+            var sc = new List<ISeries>();
+            for (var i = 0; i < keys.Count; i++)
             {
-                var v = new ChartValues<DateTimePoint>();
-                v.AddRange(columns[s].Points);
-                sc.Add(new LineSeries
+                var key = keys[i];
+                var meta = columns[key];
+                var v = columnPoints[key];
+
+                var lineSeries = new LineSeries<DateTimePoint>
                 {
-                    Title = columns[s].Name,
-                    Tag = s,
-                    ScalesYAt = columns[s].axis,
-                    PointGeometrySize = cnt <= 100 ? DefaultPointSize : 0,
+                    Name = meta.Name,
+                    Tag = key,
+                    ScalesYAt = meta.axis,
                     LineSmoothness = DefaultLineSmoothness,
                     Values = v,
-                    Fill = DefaultFill
-                }
-                );
+                    GeometrySize = 10,
+                };
+
+                sc.Add(lineSeries);
+                i += 1;
             }
-            Series.AddRange(sc);
+
+            Series = sc;
             UpdateColumnVisibility(columns);
-            AxisX.Clear();
-            if (AxisX.Count == 0)
+
+            XAxes = new List<Axis>
             {
-                AxisX.Add(new Axis
+                new Axis
                 {
-                    Title = "Time",
-                    LabelFormatter = val => new DateTime((long)val).ToString(DateRange.DateFormatString)
-                });
-            }
-            if (Series[0].Values.Count == 1)
+                    Name = "Time",
+                    Labeler = val => new DateTime((long)val).ToString(DateRange.DateFormatString)
+                }
+            };
+
+            if (Series.FirstOrDefault() is LineSeries<DateTimePoint> first &&
+                first.Values is IReadOnlyCollection<DateTimePoint> vals &&
+                vals.Count == 1)
             {
-                Series.Clear(); // fix tends to zero error
+                Series = new List<ISeries>(); // fix tends to zero error
             }
+        }
+
+        // Very small HSL → SKColor helper
+        private static SKColor FromHsl(double h, double s, double l)
+        {
+            double r, g, b;
+
+            if (Math.Abs(s) <= double.Epsilon)
+            {
+                r = g = b = l;
+            }
+            else
+            {
+                double q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+                double p = 2 * l - q;
+
+                double HueToRgb(double p2, double q2, double t)
+                {
+                    if (t < 0) t += 1;
+                    if (t > 1) t -= 1;
+                    if (t < 1.0 / 6) return p2 + (q2 - p2) * 6 * t;
+                    if (t < 1.0 / 2) return q2;
+                    if (t < 2.0 / 3) return p2 + (q2 - p2) * (2.0 / 3 - t) * 6;
+                    return p2;
+                }
+
+                r = HueToRgb(p, q, h + 1.0 / 3);
+                g = HueToRgb(p, q, h);
+                b = HueToRgb(p, q, h - 1.0 / 3);
+            }
+
+            return new SKColor(
+                (byte)(r * 255),
+                (byte)(g * 255),
+                (byte)(b * 255));
         }
     }
 }

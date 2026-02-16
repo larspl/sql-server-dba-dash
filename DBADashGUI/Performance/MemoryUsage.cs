@@ -1,7 +1,10 @@
 ﻿using DBADashGUI.Theme;
-using LiveCharts;
-using LiveCharts.Wpf;
+using LiveChartsCore;
+using LiveChartsCore.SkiaSharpView;
+using LiveChartsCore.SkiaSharpView.Painting;
 using Microsoft.Data.SqlClient;
+using SkiaSharp.Views.Desktop;
+using SkiaSharp;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -172,35 +175,57 @@ namespace DBADashGUI.Performance
 
         private void ShowPie(ref DataTable dt)
         {
-            pieChart1.Series.Clear();
+            var series = new List<ISeries>();
+            double other = 0d;
 
-            static string labelPoint(ChartPoint chartPoint) =>
-                $"{chartPoint.SeriesView.Title} ({chartPoint.Participation:P})";
-            SeriesCollection sc = new();
-            double other = 0;
             foreach (DataRow r in dt.Rows)
             {
                 var pages = Convert.ToDouble(r["pages_kb"]);
                 var pct = Convert.ToDouble(r["Pct"]);
-                var dataLabels = pct > 0.05;
+                var name = (string)r["MemoryClerkType"];
+                var showDataLabels = pct > 0.05;
+
                 if (pct > 0.02)
                 {
-                    var s = new PieSeries() { Title = (string)r["MemoryClerkType"], Values = new ChartValues<double> { pages }, LabelPoint = labelPoint, DataLabels = dataLabels, ToolTip = true };
-                    sc.Add(s);
+                    var s = new PieSeries<double>
+                    {
+                        Name = name,
+                        Values = new[] { pages },
+                        DataLabelsPaint = showDataLabels
+                            ? new SolidColorPaint(DashColors.White.ToSKColor()) { StrokeThickness = 2 }
+                            : null,
+                        DataLabelsFormatter = point =>
+                            showDataLabels
+                                ? $"{point.Context.Series.Name} ({point.StackedValue?.Share:P2})"
+                                : string.Empty,
+                        DataLabelsPosition = LiveChartsCore.Measure.PolarLabelsPosition.Middle,
+                        ToolTipLabelFormatter = point => $"{point.StackedValue?.Share:P2}"
+                    };
+                    series.Add(s);
                 }
                 else
                 {
                     other += pages;
                 }
             }
+
             if (other > 0)
             {
-                var s = new PieSeries() { Title = "{Other}", Values = new ChartValues<double> { other }, LabelPoint = labelPoint, DataLabels = true, ToolTip = true };
-                sc.Add(s);
+                var s = new PieSeries<double>
+                {
+                    Name = "{Other}",
+                    Values = new[] { other },
+                    DataLabelsPaint = new SolidColorPaint(DashColors.White.ToSKColor()) { StrokeThickness = 2 },
+                    DataLabelsFormatter = point => $"{point.Context.Series.Name} ({point.StackedValue?.Share:P2})",
+                    DataLabelsPosition = LiveChartsCore.Measure.PolarLabelsPosition.Middle,
+                    ToolTipLabelFormatter = point => $"{point.StackedValue?.Share:P2}"
+                };
+                series.Add(s);
             }
 
-            pieChart1.Series = sc;
-            pieChart1.LegendLocation = LegendLocation.Bottom;
+            pieChart1.Series = series;
+            pieChart1.LegendTextPaint = new SolidColorPaint(DBADashUser.SelectedTheme.ForegroundColor.ToSKColor());
+            pieChart1.LegendPosition = LiveChartsCore.Measure.LegendPosition.Bottom;
         }
 
         public DataTable GetMemoryUsage()
@@ -293,7 +318,7 @@ namespace DBADashGUI.Performance
                 return;
             }
             ChartView = ChartViews.MemoryClerk;
-            chartClerk.Series.Clear();
+
             var dt = GetMemoryClerkUsage(selectedClerk, dateGrouping, tsAgg.Text, selectedCounter);
             if (dt.Rows.Count > MaxChartPoints)
             {
@@ -304,14 +329,23 @@ namespace DBADashGUI.Performance
             {
                 {selectedCounter, new ColumnMetaData{Name=selectedCounterAlias,IsVisible=true } }
             };
-            chartClerk.LegendLocation = LegendLocation.Top;
-            chartClerk.AddDataTable(dt, columns, "SnapshotDate", false);
-            chartClerk.AxisY.Clear();
-            chartClerk.AxisY.Add(new Axis()
+            chartClerk.Series = Array.Empty<ISeries>();
+            chartClerk.XAxes = Array.Empty<Axis>();
+            chartClerk.YAxes = new[]
             {
-                MinValue = 0,
-                LabelFormatter = val => val.ToString(format)
-            });
+                new Axis
+                {
+                    MinLimit = 0,
+                    Labeler = val => val.ToString(format),
+                    LabelsPaint = new SolidColorPaint(new SKColor(0x99, 0x99, 0x99)),
+                    NamePaint = new SolidColorPaint(new SKColor(0x99, 0x99, 0x99)),
+                    TicksPaint = new SolidColorPaint(new SKColor(0xCC, 0xCC, 0xCC)),
+                    SubticksPaint = new SolidColorPaint(new SKColor(0xE0, 0xE0, 0xE0)),
+                    TextSize = 14
+                }
+            };
+
+            chartClerk.AddDataTable(dt, columns, "SnapshotDate", false);
             tsAgg.Enabled = dateGrouping > 0;
         }
 

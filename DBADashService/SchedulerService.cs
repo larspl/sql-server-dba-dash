@@ -1,5 +1,4 @@
-﻿using AsyncKeyedLock;
-using DBADash;
+﻿using DBADash;
 using DBADash.InstanceMetadata;
 using DBADash.Messaging;
 using Microsoft.Extensions.Hosting;
@@ -31,7 +30,9 @@ namespace DBADashService
         private System.Timers.Timer folderCleanupTimer;
         private readonly CollectionSchedules schedules;
         private MessageProcessing messageProcessing;
-        public static readonly AsyncKeyedLocker<string> Locker = new();
+        private CollectionWorkQueue workQueue;
+        private readonly ConcurrentBag<Task> backgroundTasks = new();
+        private CancellationTokenSource backgroundTasksCts;
 
         private static readonly ResiliencePipeline pipeline = new ResiliencePipelineBuilder()
             .AddRetry(new RetryStrategyOptions
@@ -64,16 +65,27 @@ namespace DBADashService
             {
                 Log.Information("Custom schedules set at agent level");
             }
+            // Initialize work queue if queue-based scheduling is enabled
+            if (config.IsUseQueueBasedScheduling())
+            {
+                workQueue = new CollectionWorkQueue(config);
+                ScheduledCollectionJob.Initialize(workQueue);
+                Log.Information("Queue-based scheduling enabled");
+            }
+            else
+            {
+                Log.Information("Using traditional per-instance scheduling");
+            }
 
-            var threads = config.GetThreadCount();
+            var schedulerThreads = config.GetSchedulerThreadCount();
 
             NameValueCollection props = new()
             {
             { "quartz.serializer.type", "binary" },
             { "quartz.scheduler.instanceName", "DBADashScheduler" },
             { "quartz.jobStore.type", "Quartz.Simpl.RAMJobStore, Quartz" },
-            { "quartz.threadPool.threadCount", threads.ToString() },
-            { "quartz.threadPool.maxConcurrency", threads.ToString() }
+            { "quartz.threadPool.threadCount", schedulerThreads.ToString() },
+            { "quartz.threadPool.maxConcurrency", schedulerThreads.ToString() }
             };
 
             StdSchedulerFactory factory = new(props);
@@ -187,9 +199,17 @@ namespace DBADashService
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            stoppingToken.Register(Stop);
+            // Create linked cancellation token for all background tasks (can be cancelled early during shutdown)
+            backgroundTasksCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+
             var offlineCheckTask = OfflineInstances.AddIfOffline(config.SourceConnections, stoppingToken);
             await scheduler.Start(stoppingToken);
+
+            // Start work queue if using queue based scheduling
+            if (config.IsUseQueueBasedScheduling())
+            {
+                workQueue.Start(stoppingToken);
+            }
             try
             {
                 await UpgradeDBAsync();
@@ -214,7 +234,7 @@ namespace DBADashService
                 {
                     Log.Information("All source connections are online");
                 }
-                _ = Task.Run(() => OfflineInstances.ManageOfflineInstances(config, stoppingToken), stoppingToken);
+                backgroundTasks.Add(Task.Run(() => OfflineInstances.ManageOfflineInstances(config, backgroundTasksCts.Token), backgroundTasksCts.Token));
             }
             catch (Exception ex)
             {
@@ -222,7 +242,7 @@ namespace DBADashService
             }
             try
             {
-                await ScheduleJobsAsync().WaitAsync(stoppingToken);
+                await ScheduleJobsAsync(stoppingToken).WaitAsync(stoppingToken);
             }
             catch (Exception ex)
             {
@@ -254,15 +274,25 @@ namespace DBADashService
             File.Delete(filePath);
         }
 
-        public async void Stop()
+        public override async Task StopAsync(CancellationToken cancellationToken)
         {
+            const int workQueueTimeout = 20;
+            const int backgroundTaskTimeout = 20;
+
+            // Cancel all background tasks immediately so they can start shutting down
+            if (backgroundTasksCts != null)
+            {
+                Log.Information("Cancelling background tasks...");
+                backgroundTasksCts.Cancel();
+            }
+
             Log.Information("Pause schedules...");
             await scheduler.Standby();
             Log.Information("Wait for jobs to complete...");
             var waitCount = 0;
             while ((await scheduler.GetCurrentlyExecutingJobs()).Count > 0)
             {
-                Thread.Sleep(500);
+                await Task.Delay(500, cancellationToken);
                 waitCount++;
                 if (waitCount > 60)
                 {
@@ -270,11 +300,71 @@ namespace DBADashService
                     break;
                 }
             }
-            Log.Information("Remove Event Sessions");
+            // Stop work queue if using queue based scheduling
+            if (config.IsUseQueueBasedScheduling())
+            {
+                Log.Information("Stopping collection work queue...");
+                try
+                {
+                    using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(workQueueTimeout));
+                    using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+                    await workQueue.StopAsync().WaitAsync(linkedCts.Token);
+                    Log.Information("Collection work queue stopped");
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    Log.Warning("Collection work queue stop was cancelled by shutdown token");
+                }
+                catch (OperationCanceledException)
+                {
+                    Log.Warning("Collection work queue stop timed out after {timeout} seconds", (workQueueTimeout));
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Error stopping collection work queue");
+                }
+            }
+
             await RemoveEventSessionsAsync();
+
+            // Wait for background tasks to complete (alert processing, offline instances, Azure scan, SQS)
+            var tasksSnapshot = backgroundTasks.ToArray();
+
+            try
+            {
+                if (tasksSnapshot.Length > 0)
+                {
+                    Log.Information("Waiting for {count} background task(s) to complete...", tasksSnapshot.Length);
+                    try
+                    {
+                        var timeout = TimeSpan.FromSeconds(backgroundTaskTimeout);
+                        await Task.WhenAll(tasksSnapshot).WaitAsync(timeout);
+                        Log.Information("Background tasks completed");
+                    }
+                    catch (TimeoutException)
+                    {
+                        Log.Warning("Background tasks did not complete within {timeout} seconds", backgroundTaskTimeout);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        Log.Information("Background tasks cancelled");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Debug(ex, "Background tasks completed with exceptions (expected during shutdown)");
+                    }
+                }
+            }
+            finally
+            {
+                backgroundTasksCts?.Dispose();
+            }
+
             Log.Information("Shutdown Scheduler");
             await scheduler.Shutdown();
             Log.Information("Shutdown complete");
+
+            await base.StopAsync(cancellationToken);
         }
 
         private async Task ScheduleAndRunMaintenanceJobAsync()
@@ -329,17 +419,22 @@ namespace DBADashService
                 {
                     Log.Error(ex, "Error scanning for Azure DBs");
                 }
-                if (config.ScanForAzureDBsInterval > 0)
-                {
-                    Log.Information("Schedule Scan for new Azure DBS every {scanInterval} seconds", config.ScanForAzureDBsInterval);
-                    azureScanForNewDBsTimer = new System.Timers.Timer
-                    {
-                        Enabled = true,
-                        Interval = config.ScanForAzureDBsInterval * 1000
-                    };
-                    azureScanForNewDBsTimer.Elapsed += ScanForAzureDBs;
-                }
             }
+            if (config.ScanForAzureDBsInterval > 0)
+            {
+                Log.Information("Schedule Scan for new Azure DBS every {scanInterval} seconds", config.ScanForAzureDBsInterval);
+                azureScanForNewDBsTimer = new System.Timers.Timer
+                {
+                    Enabled = true,
+                    Interval = config.ScanForAzureDBsInterval * 1000
+                };
+                azureScanForNewDBsTimer.Elapsed += ScanForAzureDBs;
+            }
+        }
+
+        private async void ScanForAzureDBs(object sender, ElapsedEventArgs e)
+        {
+            await ScanForAzureDBsAsync();
         }
 
         private async Task ScanForAzureDBsAsync(DBADashSource src)
@@ -360,7 +455,15 @@ namespace DBADashService
                 {
                     if (isAzureDBMaster)
                     {
-                        await ScheduleCollectionsAsync(config.AddAzureDBs(src));
+                        var newSources = config.AddAzureDBs(src);
+                        if (config.IsUseQueueBasedScheduling())
+                        {
+                            await ScheduleCollectionsWithQueueAsync(newSources.ToList());
+                        }
+                        else
+                        {
+                            await ScheduleCollectionsAsync(newSources.ToList());
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -373,15 +476,18 @@ namespace DBADashService
         private async Task ScanForAzureDBsAsync()
         {
             Log.Information("Scan for new azure DBs");
-            await ScheduleCollectionsAsync(config.AddAzureDBs());
+            var newSources = config.AddAzureDBs();
+            if (config.IsUseQueueBasedScheduling())
+            {
+                await ScheduleCollectionsWithQueueAsync(newSources.ToList());
+            }
+            else
+            {
+                await ScheduleCollectionsAsync(newSources.ToList());
+            }
         }
 
-        private async void ScanForAzureDBs(object sender, ElapsedEventArgs e)
-        {
-            await ScanForAzureDBsAsync();
-        }
-
-        private CollectionType[] RemoveNotApplicableCollections(CollectionType[] types)
+        private IEnumerable<CollectionType> RemoveNotApplicableCollections(IEnumerable<CollectionType> types)
         {
             if (ShouldKeepAvailableProcs())
             {
@@ -394,7 +500,7 @@ namespace DBADashService
             }
 
             LogAvailableProcsRemovalOnce();
-            return types.Where(type => type != CollectionType.AvailableProcs).ToArray();
+            return types.Where(type => type != CollectionType.AvailableProcs);
         }
 
         private static void LogAvailableProcsRemovalOnce()
@@ -429,16 +535,16 @@ namespace DBADashService
             }
             var customCollections = src.CustomCollections.CombineCollections(config.CustomCollections);
 
-            var onStartCollections = RemoveNotApplicableCollections(srcSchedule.OnServiceStartCollection);
+            var onStartCollections = RemoveNotApplicableCollections(srcSchedule.OnServiceStartCollection).Where(typ => typ != CollectionType.SchemaSnapshot);
 
-            if (srcSchedule.OnServiceStartCollection.Length > 0)
+            if (srcSchedule.OnServiceStartCollection.Any())
             {
                 Log.Information("Trigger on startup collections for {source} to collect {collection}", src.SourceConnection.ConnectionForPrint, onStartCollections);
                 var onStartCustom = customCollections
                     .Where(c => c.Value.RunOnServiceStart)
                     .ToDictionary(c => c.Key, c => c.Value);
 
-                var serviceStartJob = GetJob(onStartCollections, src, cfgString, onStartCustom);
+                var serviceStartJob = GetJob(onStartCollections.ToArray(), src, cfgString, onStartCustom, "OnStart");
                 scheduler.AddJob(serviceStartJob, true).ConfigureAwait(false).GetAwaiter().GetResult();
                 await scheduler.TriggerJob(serviceStartJob.Key);
             }
@@ -463,7 +569,7 @@ namespace DBADashService
                             var custom = customCollections
                                 .Where(c => c.Value.Schedule == s.Key)
                                 .ToDictionary(c => c.Key, c => c.Value);
-                            var job = GetJob(collections, src, cfgString, custom);
+                            var job = GetJob(collections.ToArray(), src, cfgString, custom, s.Key);
                             Log.Information("Add schedule for {source} to collect {collection},{custom} on schedule {schedule}", src.SourceConnection.ConnectionForPrint, collections, custom.Keys, s.Key);
                             ScheduleJob(s.Key, job);
                         }
@@ -478,6 +584,7 @@ namespace DBADashService
                                     .UsingJobData("Source", src.SourceConnection.ConnectionString)
                                     .UsingJobData("CFG", cfgString)
                                     .UsingJobData("SchemaSnapshotDBs", src.SchemaSnapshotDBs)
+                                    .UsingJobData("Schedule", snapshotSchedule.Schedule)
                                     .Build();
 
                                 ScheduleJob(snapshotSchedule.Schedule, job);
@@ -493,7 +600,7 @@ namespace DBADashService
                     }
                 case ConnectionType.Directory or ConnectionType.AWSS3:
                     {
-                        var job = GetJob(null, src, cfgString, null);
+                        var job = GetJob(null, src, cfgString, null, CollectionSchedule.DefaultImportSchedule.Schedule);
                         Log.Information("Add schedule for {source} to import on schedule {schedule}", src.SourceConnection.ConnectionForPrint, CollectionSchedule.DefaultImportSchedule);
                         ScheduleJob(CollectionSchedule.DefaultImportSchedule.Schedule, job);
                         break;
@@ -503,7 +610,7 @@ namespace DBADashService
 
         private SQSMessageProcessing sqsMessageProcessing;
 
-        private async Task ScheduleJobsAsync()
+        private async Task ScheduleJobsAsync(CancellationToken stoppingToken)
         {
             Log.Information("Agent Version {version}", Assembly.GetEntryAssembly().GetName().Version);
             messageProcessing = new MessageProcessing(config);
@@ -516,9 +623,16 @@ namespace DBADashService
             await ScheduleAndRunMaintenanceJobAsync();
             ScheduleSummaryRefresh();
 
-            await ScheduleCollectionsAsync(config.SourceConnections.ToList());
+            if (config.IsUseQueueBasedScheduling())
+            {
+                await ScheduleCollectionsWithQueueAsync(config.SourceConnections.ToList());
+            }
+            else
+            {
+                await ScheduleCollectionsAsync(config.SourceConnections.ToList());
+            }
 
-            _ = ScheduleAndRunAzureScanAsync();
+            backgroundTasks.Add(ScheduleAndRunAzureScanAsync());
 
             FolderCleanup();
             folderCleanupTimer = new System.Timers.Timer
@@ -528,10 +642,11 @@ namespace DBADashService
             };
             folderCleanupTimer.Elapsed += FolderCleanup;
             await messageTask;
+
             if (!string.IsNullOrEmpty(config.ServiceSQSQueueUrl))
             {
                 sqsMessageProcessing = new SQSMessageProcessing(config);
-                _ = sqsMessageProcessing.ProcessSQSQueue(DBADashAgent.GetCurrent().AgentIdentifier);
+                backgroundTasks.Add(sqsMessageProcessing.ProcessSQSQueue(DBADashAgent.GetCurrent().AgentIdentifier, backgroundTasksCts.Token));
             }
 
             Log.Information("Alert processing is {IsEnabled}", config.ProcessAlerts ? "enabled" : "disabled");
@@ -543,7 +658,8 @@ namespace DBADashService
                     NotificationProcessingFrequencySeconds = config.AlertProcessingFrequencySeconds ?? CollectionConfig.DefaultAlertProcessingFrequencySeconds
                 }))
                 {
-                    _ = Task.Run(() => alertProcessing.ProcessAlerts());
+                    var task = Task.Run(() => alertProcessing.ProcessAlerts(backgroundTasksCts.Token), backgroundTasksCts.Token);
+                    backgroundTasks.Add(task);
                 }
             }
         }
@@ -564,7 +680,218 @@ namespace DBADashService
             });
         }
 
-        private static IJobDetail GetJob(CollectionType[] types, DBADashSource src, string cfgString, Dictionary<string, CustomCollection> customCollections)
+        private CollectionSchedules GetCombinedSchedule(DBADashSource src)
+        {
+            var s = (src.CollectionSchedules is { Count: > 0 })
+                ? CollectionSchedules.Combine(schedules, src.CollectionSchedules)
+                : schedules;
+
+            if (config.EnabledMetadataProviders.Count == 0)
+            {
+                s.Remove(CollectionType.InstanceMetadata);
+            }
+
+            return s;
+        }
+
+        private Dictionary<string, CollectionType[]> BuildGroupedSchedules(CollectionSchedules srcSchedule, Dictionary<string, CustomCollection> customCollections)
+        {
+            var grouped = srcSchedule.GroupedBySchedule;
+
+            foreach (var schedule in customCollections
+                .GroupBy(c => c.Value.Schedule)
+                .Where(g => !grouped.ContainsKey(g.Key))
+                .Select(g => g.Key))
+            {
+                grouped.Add(schedule, Array.Empty<CollectionType>());
+            }
+
+            return grouped;
+        }
+
+        private async Task ScheduleCollectionsWithQueueAsync(List<DBADashSource> connections)
+        {
+            // Schedule -> (Types, Sources, CustomCollectionsForSchedule)
+            var scheduleGroups = new Dictionary<string, (CollectionType[] Types, List<DBADashSource> Sources, Dictionary<string, CustomCollection> Custom)>();
+
+            foreach (var src in connections.Where(src => src.SourceConnection.Type == ConnectionType.SQL))
+            {
+                var srcSchedule = GetCombinedSchedule(src);
+                // Compute once for this source and reuse
+                var customCollections = src.CustomCollections.CombineCollections(config.CustomCollections);
+
+                // Build combined grouped schedules (core + custom)
+                var groupedSchedule = BuildGroupedSchedules(srcSchedule, customCollections);
+
+                // Aggregate sources per schedule with consistent type sets
+                foreach (var group in groupedSchedule)
+                {
+                    var scheduleKey = group.Key;
+                    if (string.IsNullOrEmpty(scheduleKey))
+                    {
+                        continue;
+                    }
+
+                    var collections = RemoveNotApplicableCollections(group.Value).ToArray();
+
+                    // Pre-filter custom collections for this schedule, compute once
+                    var customForSchedule = customCollections
+                        .Where(c => c.Value.Schedule == scheduleKey)
+                        .ToDictionary(c => c.Key, c => c.Value);
+
+                    var finalKey = BuildScheduleGroupKey(scheduleKey, collections, customForSchedule.Keys);
+
+                    if (!scheduleGroups.TryGetValue(finalKey, out var bucket))
+                    {
+                        bucket = (collections, new List<DBADashSource>(), customForSchedule);
+                        scheduleGroups[finalKey] = bucket;
+                    }
+
+                    bucket.Sources.Add(src);
+                }
+
+                // Enqueue on-start grouped by priority (reuse the precomputed customCollections)
+                await EnqueueOnStartByPriorityAsync(src, srcSchedule, customCollections);
+            }
+            foreach (var src in connections.Where(src => src.SourceConnection.Type != ConnectionType.SQL))
+            {
+                // Non-SQL sources (Directory, AWSS3) - single import schedule
+                var scheduleKey = CollectionSchedule.DefaultImportSchedule.Schedule;
+                var finalKey = BuildScheduleGroupKey(scheduleKey, Array.Empty<CollectionType>(), null);
+                if (!scheduleGroups.TryGetValue(finalKey, out var bucket))
+                {
+                    bucket = (Array.Empty<CollectionType>(), new List<DBADashSource>(), new Dictionary<string, CustomCollection>());
+                    scheduleGroups[finalKey] = bucket;
+                }
+                bucket.Sources.Add(src);
+            }
+
+            // Create one scheduled job per unique schedule+types combination
+            foreach (var kvp in scheduleGroups)
+            {
+                var schedule = ExtractScheduleFromGroupKey(kvp.Key);
+                var (types, sources, customForSchedule) = kvp.Value;
+
+                Log.Information("Creating scheduled job for {instanceCount} instances on schedule {schedule} with types {types}",
+                    sources.Count, schedule, string.Join(", ", types.Select(t => t.ToString())));
+
+                var job = JobBuilder.Create<ScheduledCollectionJob>()
+                    .WithIdentity($"ScheduledCollection_{kvp.Key}")
+                    .UsingJobData("Schedule", schedule)
+                    .UsingJobData("Types", JsonConvert.SerializeObject(types))
+                    .UsingJobData("CustomCollections", JsonConvert.SerializeObject(customForSchedule))
+                    // no Sources in JobDataMap
+                    .Build();
+
+                // Upsert instances into the in-memory dictionary
+                ScheduledCollectionJob.UpsertSources(job.Key.Name, sources);
+
+                // Ensure job exists (no duplicate scheduling)
+                EnsureScheduledJob(schedule, job);
+            }
+        }
+
+        private async Task EnqueueOnStartByPriorityAsync(
+    DBADashSource src,
+    CollectionSchedules srcSchedule,
+    Dictionary<string, CustomCollection> customCollections)
+        {
+            var onStartTypes = RemoveNotApplicableCollections(srcSchedule.OnServiceStartCollection).ToArray();
+            if (onStartTypes.Length == 0)
+            {
+                return;
+            }
+
+            // SchemaSnapshot as a separate low-priority work item
+            if (onStartTypes.Contains(CollectionType.SchemaSnapshot) && src.SchemaSnapshotDBs is { Length: > 0 })
+            {
+                var snapshotWorkItem = new SchemaSnapshotWorkItem
+                {
+                    Source = src,
+                    Schedule = "OnStartup"
+                };
+
+                await workQueue.EnqueueAsync(snapshotWorkItem);
+                onStartTypes = onStartTypes.Where(t => t != CollectionType.SchemaSnapshot).ToArray();
+
+                var anyCustomOnStart = customCollections.Any(c => c.Value.RunOnServiceStart);
+                if (onStartTypes.Length == 0 && !anyCustomOnStart)
+                {
+                    return; // only schema snapshot on start
+                }
+            }
+
+            var typeGroups = onStartTypes
+                .GroupBy(t =>
+                {
+                    var sched = srcSchedule.ContainsKey(t) ? srcSchedule[t].Schedule : null;
+                    return ScheduledCollectionJob.ComputePriorityFromSchedule(sched);
+                })
+                .ToDictionary(g => g.Key, g => g.ToArray());
+
+            var customOnStartGroups = customCollections
+                .Where(c => c.Value.RunOnServiceStart)
+                .GroupBy(kvp => ScheduledCollectionJob.ComputePriorityFromSchedule(kvp.Value?.Schedule))
+                .ToDictionary(g => g.Key, g => g.ToDictionary(x => x.Key, x => x.Value));
+
+            // Enqueue one work item per priority group (merge custom with same priority)
+            foreach (var kvp in typeGroups)
+            {
+                customOnStartGroups.TryGetValue(kvp.Key, out var customForPriority);
+
+                var workItem = new WorkItem
+                {
+                    Source = src,
+                    Types = kvp.Value,
+                    CustomCollections = customForPriority ?? new Dictionary<string, CustomCollection>(),
+                    Schedule = "OnStartup",
+                    Priority = kvp.Key
+                };
+                Log.Information("Enqueue on-start work item for {source} with types {types} at priority {priority}", src.SourceConnection.ConnectionForPrint, workItem.AllTypes, kvp.Key);
+
+                await workQueue.EnqueueAsync(workItem);
+            }
+
+            // Custom-only groups (no core types in the same priority)
+            foreach (var kvp in customOnStartGroups)
+            {
+                if (typeGroups.ContainsKey(kvp.Key)) continue;
+
+                var workItem = new WorkItem
+                {
+                    Source = src,
+                    Types = Array.Empty<CollectionType>(),
+                    CustomCollections = kvp.Value,
+                    Schedule = "OnStartup",
+                    Priority = kvp.Key
+                };
+
+                await workQueue.EnqueueAsync(workItem);
+            }
+        }
+
+        private static string BuildScheduleGroupKey(string scheduleKey, CollectionType[] types, IEnumerable<string> customNames)
+        {
+            var typeParts = (types ?? Array.Empty<CollectionType>())
+                .OrderBy(t => (int)t)
+                .Select(t => t.ToString());
+
+            var customParts = (customNames ?? Enumerable.Empty<string>())
+                .OrderBy(n => n, StringComparer.Ordinal);
+
+            var signature = string.Join("|", typeParts.Concat(customParts)); // stable, readable
+
+            return $"{scheduleKey}|{signature}";
+        }
+
+        private static string ExtractScheduleFromGroupKey(string groupKey)
+        {
+            if (string.IsNullOrEmpty(groupKey)) return groupKey;
+            var idx = groupKey.IndexOf('|');
+            return idx <= 0 ? groupKey : groupKey.Substring(0, idx);
+        }
+
+        private static IJobDetail GetJob(CollectionType[] types, DBADashSource src, string cfgString, Dictionary<string, CustomCollection> customCollections, string schedule)
         {
             return JobBuilder.Create<DBADashJob>()
                      .UsingJobData("Type", JsonConvert.SerializeObject(types))
@@ -573,6 +900,7 @@ namespace DBADashService
                      .UsingJobData("Job_instance_id", 0)
                      .UsingJobData("SourceType", JsonConvert.SerializeObject(src.SourceConnection.Type))
                      .UsingJobData("CustomCollections", JsonConvert.SerializeObject(customCollections))
+                     .UsingJobData("Schedule", schedule)
                      .StoreDurably()
                     .Build();
         }
@@ -601,8 +929,25 @@ namespace DBADashService
             scheduler.ScheduleJob(job, trigger).ConfigureAwait(false).GetAwaiter().GetResult();
         }
 
+        private void EnsureScheduledJob(string schedule, IJobDetail job)
+        {
+            ArgumentNullException.ThrowIfNull(schedule);
+
+            if (scheduler.CheckExists(job.Key).ConfigureAwait(false).GetAwaiter().GetResult())
+            {
+                return;
+            }
+
+            ITrigger trigger = int.TryParse(schedule, out var seconds)
+                ? TriggerBuilder.Create().StartNow().WithSimpleSchedule(x => x.WithIntervalInSeconds(seconds).RepeatForever()).Build()
+                : TriggerBuilder.Create().StartNow().WithCronSchedule(schedule).Build();
+
+            scheduler.ScheduleJob(job, trigger).ConfigureAwait(false).GetAwaiter().GetResult();
+        }
+
         private async Task RemoveEventSessionsAsync()
         {
+            Log.Information("Remove event sessions started");
             var options = new ParallelOptions()
             {
                 MaxDegreeOfParallelism = 30
@@ -611,6 +956,7 @@ namespace DBADashService
             {
                 await RemoveEventSessionAsync(src);
             });
+            Log.Information("Remove event sessions completed");
         }
 
         private async Task RemoveEventSessionAsync(DBADashSource src)

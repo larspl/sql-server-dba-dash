@@ -1,8 +1,10 @@
-﻿using LiveCharts;
-using LiveCharts.Defaults;
-using LiveCharts.Wpf;
+﻿using DBADashGUI.Charts;
+using LiveChartsCore;
+using LiveChartsCore.Measure;
+using LiveChartsCore.SkiaSharpView;
 using Microsoft.Data.SqlClient;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
 using System.Linq;
@@ -33,31 +35,10 @@ namespace DBADashGUI.Performance
         public int InstanceID { get; set; }
 
         private int DateGrouping;
-        private bool smoothLines = true;
         private int durationMins;
 
-        public int PointSize;
-
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Visible)]
-        public bool SmoothLines
-        {
-            get => smoothLines;
-            set
-            {
-                smoothLines = value;
-                foreach (Series s in chartCPU.Series.Cast<Series>())
-                {
-                    if (s.GetType() == typeof(LineSeries))
-                    {
-                        ((LineSeries)s).LineSmoothness = smoothLines ? 1 : 0;
-                    }
-                    else if (s.GetType() == typeof(StackedAreaSeries))
-                    {
-                        ((StackedAreaSeries)s).LineSmoothness = smoothLines ? 1 : 0;
-                    }
-                }
-            }
-        }
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public int PointSize { get; set; } = 0;
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool MoveUpVisible
@@ -81,6 +62,11 @@ namespace DBADashGUI.Performance
                 mnu.Checked = (string)mnu.Tag == Enum.GetName(Metric.AggregateType);
             }
         }
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public bool SmoothLines { get; set; } = true;
+
+        private LegendPosition legendPosition = LegendPosition.Hidden;
 
         public void RefreshData(int InstanceID)
         {
@@ -128,88 +114,94 @@ namespace DBADashGUI.Performance
 
             CpuDataTable = await GetCpuDataTable();
 
-            var sqlProcessValues = new ChartValues<DateTimePoint>();
-            var otherValues = new ChartValues<DateTimePoint>();
-            var maxValues = new ChartValues<DateTimePoint>();
+            RenderCpuChart();
+        }
 
-            foreach (DataRow row in CpuDataTable.Rows)
+        private void RenderCpuChart()
+        {
+            if (CpuDataTable == null || CpuDataTable.Rows.Count == 0)
             {
-                var eventTime = (DateTime)row["EventTime"];
-                sqlProcessValues.Add(new DateTimePoint(eventTime.ToAppTimeZone(), decimal.ToDouble((decimal)row["SQLProcessCPU"]) / 100.0));
-                otherValues.Add(new DateTimePoint(eventTime.ToAppTimeZone(), decimal.ToDouble((decimal)row["OtherCPU"]) / 100.0));
-                maxValues.Add(new DateTimePoint(eventTime.ToAppTimeZone(), decimal.ToDouble((decimal)row["MaxCPU"]) / 100.0));
+                chartCPU.Series = Array.Empty<ISeries>();
+                chartCPU.XAxes = Array.Empty<Axis>();
+                chartCPU.YAxes = Array.Empty<Axis>();
+                return;
             }
 
-            SeriesCollection s1 = new()
-                {
-                    new StackedAreaSeries
-                    {
-                        Title="SQL Process",
-                        Values = sqlProcessValues,
-                        LineSmoothness = SmoothLines ? 1 : 0
-                    },
-                    new StackedAreaSeries
-                    {
-                    Title = "Other",
-                    Values = otherValues,
-                    LineSmoothness = SmoothLines ? 1 : 0
-                    },
-                    new LineSeries
-                    {
-                    Title = "Max CPU",
-                    Values = maxValues,
-                    LineSmoothness = SmoothLines ? 1 : 0,
-                    PointGeometrySize = PointSize,
-                    }
-                };
-            chartCPU.AxisX.Clear();
-            chartCPU.AxisY.Clear();
+            // Prepare configuration based on aggregate type
+            ChartConfiguration config;
 
-            chartCPU.AxisX.Add(new Axis
+            if (Metric.AggregateType == IMetric.AggregateTypes.Avg)
             {
-                LabelFormatter = val => new DateTime((long)val).ToString(DateRange.DateFormatString)
-            });
-            chartCPU.AxisY.Add(new Axis
-            {
-                LabelFormatter = val => val.ToString("P1"),
-                MaxValue = 1,
-                MinValue = 0,
-            });
-            if (maxValues.Count > 1)
-            {
-                chartCPU.Series = s1;
+                // AVG mode: Stacked area chart for SQL Server and Other CPU
+                config = new ChartConfiguration
+                {
+                    DateColumn = "EventTime",
+                    MetricColumns = new[] { "SQLProcessCPU", "OtherCPU" },
+                    SeriesNames = new Dictionary<string, string>
+                    {
+                        { "SQLProcessCPU", "SQL Server" },
+                        { "OtherCPU", "Other" }
+                    },
+                    ChartType = ChartTypes.StackedArea,
+                    ShowLegend = true,
+                    LegendPosition = legendPosition,
+                    GeometrySize = PointSize,
+                    LineSmoothness = SmoothLines ? ChartConfiguration.DefaultLineSmoothness : 0,
+                    XAxisMin = DateRange.FromUTC.ToAppTimeZone(),
+                    XAxisMax = DateRange.ToUTC.ToAppTimeZone(),
+                    YAxisLabel = "CPU %",
+                    YAxisFormat = "0",
+                    YAxisMin = 0,
+                    YAxisMax = 100
+                };
             }
             else
             {
-                chartCPU.Series.Clear();
+                // MAX mode: Line chart for Max CPU
+                config = new ChartConfiguration
+                {
+                    DateColumn = "EventTime",
+                    MetricColumns = new[] { "MaxCPU" },
+                    SeriesNames = new Dictionary<string, string>
+                    {
+                        { "MaxCPU", "Max CPU" }
+                    },
+                    ChartType = ChartTypes.Line,
+                    ShowLegend = true,
+                    LegendPosition = LegendPosition.Hidden,
+                    GeometrySize = PointSize,
+                    LineFill = true,
+                    LineSmoothness = SmoothLines ? ChartConfiguration.DefaultLineSmoothness : 0,
+                    XAxisMin = DateRange.FromUTC.ToAppTimeZone(),
+                    XAxisMax = DateRange.ToUTC.ToAppTimeZone(),
+                    YAxisLabel = "CPU %",
+                    YAxisFormat = "0",
+                    YAxisMin = 0,
+                    YAxisMax = 100
+                };
             }
-            UpdateVisibility();
-        }
 
-        private void UpdateVisibility()
-        {
-            if (chartCPU.Series.Count == 3)
-            {
-                ((StackedAreaSeries)chartCPU.Series[0]).Visibility = AVGToolStripMenuItem.Checked ? System.Windows.Visibility.Visible : System.Windows.Visibility.Hidden;
-                ((StackedAreaSeries)chartCPU.Series[1]).Visibility = AVGToolStripMenuItem.Checked ? System.Windows.Visibility.Visible : System.Windows.Visibility.Hidden;
-                ((LineSeries)chartCPU.Series[2]).Visibility = MAXToolStripMenuItem.Checked ? System.Windows.Visibility.Visible : System.Windows.Visibility.Hidden;
-            }
+            ChartHelper.UpdateChart(chartCPU, CpuDataTable, config);
         }
 
         private void AVGToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            MAXToolStripMenuItem.Checked = (!AVGToolStripMenuItem.Checked);
-            Metric.AggregateType = AVGToolStripMenuItem.Checked ? IMetric.AggregateTypes.Avg : IMetric.AggregateTypes.Max;
-            tsAgg.Text = Enum.GetName(Metric.AggregateType);
-            UpdateVisibility();
+            // Use AVG as the "Area" mode: stacked area for SQL/Other + line for Max
+            AVGToolStripMenuItem.Checked = true;
+            MAXToolStripMenuItem.Checked = false;
+            Metric.AggregateType = IMetric.AggregateTypes.Avg;
+            tsAgg.Text = "Avg";
+            RenderCpuChart();
         }
 
         private void MAXToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            AVGToolStripMenuItem.Checked = (!MAXToolStripMenuItem.Checked);
-            Metric.AggregateType = AVGToolStripMenuItem.Checked ? IMetric.AggregateTypes.Avg : IMetric.AggregateTypes.Max;
-            tsAgg.Text = Enum.GetName(Metric.AggregateType);
-            UpdateVisibility();
+            // Use MAX as the "Line" mode: 3 line series (no stacking)
+            MAXToolStripMenuItem.Checked = true;
+            AVGToolStripMenuItem.Checked = false;
+            Metric.AggregateType = IMetric.AggregateTypes.Max;
+            tsAgg.Text = "Max";
+            RenderCpuChart();
         }
 
         private void CPU_Load(object sender, EventArgs e)
@@ -227,12 +219,12 @@ namespace DBADashGUI.Performance
 
         private void TsClose_Click(object sender, EventArgs e)
         {
-            Close.Invoke(this, EventArgs.Empty);
+            Close?.Invoke(this, EventArgs.Empty);
         }
 
         private void TsUp_Click(object sender, EventArgs e)
         {
-            MoveUp.Invoke(this, EventArgs.Empty);
+            MoveUp?.Invoke(this, EventArgs.Empty);
         }
 
         private void CopyData_Click(object sender, EventArgs e)
@@ -253,6 +245,17 @@ namespace DBADashGUI.Performance
                 return;
             }
             Common.PromptSaveDataTableToXLSX(CpuDataTable);
+        }
+
+        private void SetLegendPosition(object sender, EventArgs e)
+        {
+            var item = (ToolStripMenuItem)sender;
+            Enum.TryParse(item.Tag.ToString(), out legendPosition);
+            foreach (ToolStripMenuItem menuItem in tsLegend.DropDownItems.OfType<ToolStripMenuItem>())
+            {
+                menuItem.Checked = menuItem == item;
+            }
+            chartCPU.LegendPosition = legendPosition;
         }
     }
 }

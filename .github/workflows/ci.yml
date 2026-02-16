@@ -13,7 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         language: [csharp]
-        sql-version: [2016, 2017, 2019, 2022]
+        sql-version: [2016, 2017, 2019, 2022, 2025]
         sql-collation: [Latin1_General_BIN]
 
     steps:
@@ -68,7 +68,7 @@ jobs:
           Compress-Archive -Path "DBADashBuild\DBADashGUIOnly\*" -DestinationPath $guiZipPath
 
       - name: Install SQL Server ${{ matrix.sql-version }}
-        uses: potatoqualitee/mssqlsuite@v1.11
+        uses: potatoqualitee/mssqlsuite@v1.12
         with:
           install: sqlengine
           version: ${{ matrix.sql-version }}
@@ -128,6 +128,11 @@ jobs:
         run: | 
           ./Scripts/Get-TableCounts -ServerInstance "LOCALHOST" -Database "DBADashDB_GitHubAction" 
 
+      - name: Output Log and Check for Errors
+        shell: powershell
+        run: | 
+          ./Scripts/Get-LogContent -LogPath  "C:\DBADashTest\Logs" -ThrowError
+
       - name: Run Pester Tests
         shell: powershell
         run: |     
@@ -140,7 +145,3 @@ jobs:
         run: | 
             ./Scripts/Get-TableCounts -ServerInstance "LOCALHOST" -Database "DBADashDB_GitHubAction" 
 
-      - name: Output Log and Check for Errors
-        shell: powershell
-        run: | 
-          ./Scripts/Get-LogContent -LogPath  "C:\DBADashTest\Logs" -ThrowError
